@@ -131,3 +131,15 @@ if __name__ == "__main__":
     process_and_store_data("image", image_file_path)
     process_and_store_data("video", video_file_path)
     process_and_store_data("audio", audio_file_path)
+
+
+
+#Technology Stack
+#Front : ReactJS, FastAPI
+#Back / Database : Qdrant (Vector DB), (Firebase : Real-time DB)
+#Language : Python (Transformers, OpenCV, HuggingFace), Colab Enterprise (GPU) with Drive 
+#Versioning : BitPacket + Source Tree
+#Project Management: JIRA, Trello
+#Modeling : UML Enterprise Architect
+#Docker for Qdrant container ..., Windows , VM ..
+
