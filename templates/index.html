@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agricultural Advice</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Agricultural Advice</h1>
+    <form id="query-form">
+        <label for="question">Question:</label>
+        <input type="text" id="question" name="question" required>
+        <label for="collection">Collection:</label>
+        <select id="collection" name="collection" required>
+            <option value="agriculture_ar">Agriculture Arabic</option>
+            <option value="agriculture_fr">Agriculture French</option>
+        </select>
+        <button type="submit">Ask</button>
+    </form>
+    <div id="response"></div>
+    <script>
+        document.getElementById('query-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const question = document.getElementById('question').value;
+            const collection = document.getElementById('collection').value;
+            const responseDiv = document.getElementById('response');
+
+            const response = await fetch('/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ question, collection })
+            });
+
+            const result = await response.json();
+            responseDiv.innerText = result.response;
+        });
+    </script>
+</body>
+</html>
