@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/10d967a5244542ac8f5a2221f70bfed3/artifacts
+end_time: 1720622267939
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 10d967a5244542ac8f5a2221f70bfed3
+run_name: rare-gnat-238
+run_uuid: 10d967a5244542ac8f5a2221f70bfed3
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1720622267861
+status: 3
+tags: []
+user_id: LENOVO

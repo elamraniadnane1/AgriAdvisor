@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/a968cfd537e3412ca9242982ce9f8027/artifacts
+end_time: 1720623216480
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: a968cfd537e3412ca9242982ce9f8027
+run_name: secretive-ant-608
+run_uuid: a968cfd537e3412ca9242982ce9f8027
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1720623216418
+status: 3
+tags: []
+user_id: LENOVO
