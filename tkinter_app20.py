@@ -21,10 +21,11 @@ from qdrant_client.http import models
 import openai
 import mlflow
 import mlflow.pyfunc
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+import customtkinter as ctk
+from tkinter import scrolledtext, messagebox
 from threading import Thread, Lock
 from functools import lru_cache
+from PIL import Image, ImageTk
 
 # Directory and output file paths
 PDF_DIRECTORY = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset"
@@ -45,12 +46,25 @@ login_manager.init_app(flask_app)
 
 # In-memory user store
 users = {}
+USERS_FILE = 'users.json'
 
 class User(UserMixin):
     def __init__(self, id, username, password):
         self.id = id
         self.username = username
         self.password = password
+
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r', encoding='utf-8') as file:
+            user_data = json.load(file)
+            for user_id, data in user_data.items():
+                users[user_id] = User(user_id, data['username'], data['password'])
+load_users()
+
+def save_users():
+    with open(USERS_FILE, 'w', encoding='utf-8') as file:
+        json.dump({user_id: {'username': user.username, 'password': user.password} for user_id, user in users.items()}, file, ensure_ascii=False, indent=4)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -65,6 +79,7 @@ def register():
     password = hash_password(request.json['password'])
     user_id = str(uuid.uuid4())
     users[user_id] = User(user_id, username, password)
+    save_users()
     return jsonify({'message': 'User registered successfully'}), 201
 
 @flask_app.route('/login', methods=['POST'])
@@ -93,13 +108,14 @@ def query():
     return jsonify({'response': response_text}), 200
 
 def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF file."""
+    """Extract text from a PDF file with enhanced processing."""
     text = ""
     doc = fitz.open(pdf_path)
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
-        text += page.get_text()
-    return text
+        text += page.get_text("text")
+    return text.strip()
+
 
 def create_csv(data_list, output_csv):
     """Create a CSV file from the extracted data."""
@@ -115,6 +131,7 @@ def load_cache():
             return json.load(file)
     return {}
 
+
 def truncate_text(text, max_tokens):
     words = text.split()
     truncated_text = ' '.join(words[:max_tokens])
@@ -122,7 +139,9 @@ def truncate_text(text, max_tokens):
 
 def save_cache(cache):
     with open(CACHE_FILE, 'w', encoding='utf-8') as file:
+        # Ensure the new structure is saved
         json.dump(cache, file, ensure_ascii=False, indent=4)
+
 
 def process_pdfs(pdf_directory):
     """Process all PDFs in the directory and extract data."""
@@ -152,7 +171,7 @@ def process_pdfs(pdf_directory):
         create_csv(data_list_fr, OUTPUT_CSV_FR)
 
 def chunk_text(text, max_tokens=800):
-    """Chunk text into smaller pieces based on a maximum token limit."""
+    """Chunk text into smaller, semantically meaningful pieces."""
     words = text.split()
     chunks = []
     current_chunk = []
@@ -174,20 +193,49 @@ def chunk_text(text, max_tokens=800):
     return chunks
 
 def get_embedding(content):
-    """Get embedding from OpenAI API."""
-    response = openai.Embedding.create(
-        model="text-embedding-ada-002",
-        input=content
-    )
-    return response['data'][0]['embedding']
+    """Get embedding from OpenAI API with retries for robustness."""
+    for _ in range(3):  # Retry mechanism
+        try:
+            response = openai.Embedding.create(
+                model="text-embedding-ada-002",
+                input=content
+            )
+            embedding = response['data'][0]['embedding']
+            print(f"Successfully retrieved embedding for content: {content[:30]}")
+            return embedding
+        except Exception as e:
+            print(f"Error getting embedding: {e}")
+            time.sleep(2)  # Backoff before retrying
+    return None
+
+
+def collection_exists(collection_name):
+    """Check if a collection exists in Qdrant."""
+    collections = qdrant_client.get_collections().collections
+    return any(col.name == collection_name for col in collections)
+
+def check_csv_content():
+    if os.path.exists(OUTPUT_CSV_AR):
+        df_ar = pd.read_csv(OUTPUT_CSV_AR)
+        print(f"Arabic CSV contains {len(df_ar)} records.")
+    else:
+        print("Arabic CSV does not exist.")
+
+    if os.path.exists(OUTPUT_CSV_FR):
+        df_fr = pd.read_csv(OUTPUT_CSV_FR)
+        print(f"French CSV contains {len(df_fr)} records.")
+    else:
+        print("French CSV does not exist.")
+
+check_csv_content()
 
 def vectorize_and_store(csv_path, collection_name):
-    """Vectorize text and store in Qdrant."""
     if collection_name in [col.name for col in qdrant_client.get_collections().collections]:
         print(f"Collection '{collection_name}' already exists. Skipping vectorization.")
         return
     
     df = pd.read_csv(csv_path)
+    print(f"Read {len(df)} records from {csv_path}")
     
     qdrant_client.create_collection(
         collection_name=collection_name,
@@ -202,6 +250,9 @@ def vectorize_and_store(csv_path, collection_name):
         chunks = chunk_text(row['content'])
         for chunk in chunks:
             embedding = get_embedding(chunk)
+            if embedding is None:
+                print(f"Failed to get embedding for chunk: {chunk[:30]}")
+                continue
             point_id = str(uuid.uuid4())  # Generate a unique UUID for each point
             points.append(models.PointStruct(
                 id=point_id,
@@ -213,10 +264,12 @@ def vectorize_and_store(csv_path, collection_name):
                 }
             ))
     
+    print(f"Upserting {len(points)} points to {collection_name}")
     qdrant_client.upsert(
         collection_name=collection_name,
         points=points
     )
+
 
 recognizer = sr.Recognizer()
 mic_lock = Lock()
@@ -242,10 +295,17 @@ def recognize_speech_from_microphone(language="ar", callback=None):
 def clean_text_for_speech(text):
     """Clean text for speech by removing unnecessary characters."""
     text = re.sub(r'\*\*\*|\.{2,}', '', text)
+    text = re.sub(r'\s+', ' ', text)
+    text = text.replace('\n', ' ')
     return text.strip()
+
 
 def text_to_speech(text, language="ar"):
     """Convert text to speech."""
+    # Handle unsupported language "dar" by mapping it to "ar"
+    if language == "dar":
+        language = "ar"
+    
     clean_text = clean_text_for_speech(text)
     tts = gTTS(text=clean_text, lang=language)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
@@ -257,6 +317,8 @@ def text_to_speech(text, language="ar"):
 
 def play_audio():
     """Play the audio."""
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
     pygame.mixer.music.unpause()
 
 def pause_audio():
@@ -268,44 +330,53 @@ def replay_audio():
     pygame.mixer.music.stop()
     pygame.mixer.music.play()
 
+
 @lru_cache(maxsize=100)
 def cached_query_qdrant(question, collection_name):
     """Cached version of querying Qdrant to find the closest matching chunks for the given question."""
     question_embedding = get_embedding(question)
-    
+    if question_embedding is None:
+        return []
+
+    if not collection_exists(collection_name):
+        print(f"Collection '{collection_name}' does not exist.")
+        return []
+
     search_result = qdrant_client.search(
         collection_name=collection_name,
         query_vector=question_embedding,
         limit=3
     )
-    
+
     return [hit.payload["content"] for hit in search_result]
 
-def generate_response(question, collection_name, quality_mode="good", input_token_limit=800, output_token_limit=500):
+
+def generate_response(question, collection_name, quality_mode="good", input_token_limit=2000, output_token_limit=2000):
     # Define model and max tokens based on quality mode
     model = "gpt-3.5-turbo"
     max_tokens = 500
-    
+
     if quality_mode == "premium":
-        model = "gpt-4"
+        model = "gpt-4o"
         max_tokens = 2000
     elif quality_mode == "economy":
-        max_tokens = 100
+        model = "gpt-4"
+        max_tokens = 300
 
     # Truncate input question based on token limit
     truncated_question = truncate_text(question, input_token_limit)
-    
+
     relevant_chunks = cached_query_qdrant(truncated_question, collection_name)
-    
+
     prompt = (
         "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
         + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
-        + f"\nNow answer the following question: {truncated_question}"
+        + f"\nNow answer the following question: {truncated_question}. Please provide a detailed and accurate response."
     )
-    
+
     # Ensure the prompt is within the input token limit
     prompt = truncate_text(prompt, input_token_limit)
-    
+
     response = openai.ChatCompletion.create(
         model=model,
         messages=[
@@ -314,13 +385,15 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
         ],
         max_tokens=output_token_limit
     )
-    
+
     return response['choices'][0]['message']['content']
+
+
 
 def translate_text(text, target_language):
     """Translate text to the target language using GPT-4."""
     response = openai.ChatCompletion.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": f"Translate the following text to {target_language}."},
             {"role": "user", "content": text}
@@ -332,7 +405,7 @@ def translate_text(text, target_language):
 def translate_to_darija(text):
     """Translate text to Moroccan Darija using GPT-4."""
     response = openai.ChatCompletion.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "Translate the following text to Moroccan Darija using Arabic letters."},
             {"role": "user", "content": text}
@@ -403,12 +476,12 @@ def generate_report():
 
     return pd.DataFrame(interactions)
 
-class Application(tk.Tk):
+class Application(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("AI AgriAdvisor")
-        self.geometry("1000x800")
-        self.iconbitmap('icon.ico')  # Ensure you have an icon file named 'icon.ico'
+        self.geometry("1200x800")
+        self.iconbitmap("icon.ico")
 
         self.username = None
         self.recording = False
@@ -417,34 +490,52 @@ class Application(tk.Tk):
         self.show_login_window()
 
         # Cache dictionary for storing prompts and their responses
-        self.cache = {}
+        self.cache = load_cache()
 
     def show_login_window(self):
         """Display the login window."""
-        self.login_window = tk.Toplevel(self)
+        self.login_window = ctk.CTkToplevel(self)
         self.login_window.title("Login")
+        self.login_window.geometry("500x500")
+        self.login_window.iconbitmap("icon.ico")
 
-        tk.Label(self.login_window, text="Username", font=("Helvetica", 12)).grid(row=0, column=0, padx=10, pady=10)
-        tk.Label(self.login_window, text="Password", font=("Helvetica", 12)).grid(row=1, column=0, padx=10, pady=10)
+        logo_path = "uni.png"
+        logo_image = Image.open(logo_path)
+        logo_image = logo_image.resize((100, 100), Image.LANCZOS)
+        logo_photo = ImageTk.PhotoImage(logo_image)
+        ctk.CTkLabel(self.login_window, image=logo_photo, text="").grid(row=0, column=0, columnspan=2, pady=10)
+        self.login_window.logo_photo = logo_photo  # Keep a reference to prevent garbage collection
 
-        self.username_entry = tk.Entry(self.login_window, font=("Helvetica", 12))
-        self.password_entry = tk.Entry(self.login_window, show='*', font=("Helvetica", 12))
+        ctk.CTkLabel(self.login_window, text="Username", font=("Times New Roman", 12)).grid(row=1, column=0, padx=10, pady=10)
+        ctk.CTkLabel(self.login_window, text="Password", font=("Times New Roman", 12)).grid(row=2, column=0, padx=10, pady=10)
 
-        self.username_entry.grid(row=0, column=1, padx=10, pady=10)
-        self.password_entry.grid(row=1, column=1, padx=10, pady=10)
+        self.username_entry = ctk.CTkEntry(self.login_window, font=("Times New Roman", 12))
+        self.password_entry = ctk.CTkEntry(self.login_window, show='*', font=("Times New Roman", 12))
 
-        tk.Button(self.login_window, text="Login", command=self.login, font=("Helvetica", 12)).grid(row=2, column=0, columnspan=2, pady=10)
-        tk.Button(self.login_window, text="Register", command=self.register, font=("Helvetica", 12)).grid(row=3, column=0, columnspan=2, pady=10)
+        self.username_entry.grid(row=1, column=1, padx=10, pady=10)
+        self.password_entry.grid(row=2, column=1, padx=10, pady=10)
+
+        ctk.CTkLabel(self.login_window, text="Language", font=("Times New Roman", 12)).grid(row=3, column=0, padx=10, pady=10)
+        self.language_var = ctk.StringVar()
+        self.language_combobox = ctk.CTkComboBox(self.login_window, variable=self.language_var, values=["AR", "FR", "DAR"], font=("Times New Roman", 12))
+        self.language_combobox.grid(row=3, column=1, padx=10, pady=10)
+        self.language_combobox.set("AR")
+
+        ctk.CTkButton(self.login_window, text="Login", command=self.login, font=("Times New Roman", 12)).grid(row=4, column=0, columnspan=2, pady=10)
+        ctk.CTkButton(self.login_window, text="Register", command=self.register, font=("Times New Roman", 12)).grid(row=5, column=0, columnspan=2, pady=10)
 
     def login(self):
         """Handle user login."""
         username = self.username_entry.get()
         password = self.password_entry.get()
+        language = self.language_var.get()
 
         if self.authenticate(username, password):
             self.username = username
+            self.language = language
             self.login_window.destroy()
             self.show_main_window()
+            self.translate_app()
         else:
             messagebox.showerror("Error", "Invalid credentials")
 
@@ -467,103 +558,179 @@ class Application(tk.Tk):
             hashed_password = hash_password(password)
             user_id = str(uuid.uuid4())
             users[user_id] = User(user_id, username, hashed_password)
+            save_users()
             messagebox.showinfo("Success", "User registered successfully")
+
+    def translate_app(self):
+        """Translate the application based on the selected language."""
+        if self.language == "AR":
+            self.translate_to_arabic()
+        elif self.language == "FR":
+            self.translate_to_french()
+        elif self.language == "DAR":
+            self.translate_to_darija()
+
+    def translate_to_arabic(self):
+        self.input_label.configure(text="نص المدخلات:")
+        self.lang_label.configure(text="اختر لغة الإدخال:")
+        self.output_lang_label.configure(text="اختر لغة الإخراج:")
+        self.quality_label.configure(text="اختر وضع الجودة:")
+        self.input_token_label.configure(text="حد المدخلات:")
+        self.output_token_label.configure(text="حد المخرجات:")
+        self.output_label.configure(text="نص الإخراج:")
+        self.submit_button.configure(text="إرسال")
+        self.submit_text_button.configure(text="إرسال")
+        self.record_button.configure(text="تسجيل")
+        self.stop_button.configure(text="إيقاف التسجيل")
+        self.speak_button.configure(text="قراءة الإخراج بصوت عال")
+        self.play_button.configure(text="▶ تشغيل")
+        self.pause_button.configure(text="⏸ إيقاف مؤقت")
+        self.replay_button.configure(text="⏪ إعادة التشغيل")
+        self.report_button.configure(text="توليد التقرير")
+        self.user_info_label.configure(text=f"مسجل الدخول: {self.username}")
+        self.logout_button.configure(text="تسجيل الخروج")
+        self.recording_label.configure(text="تسجيل... يرجى التحدث في الميكروفون")
+        self.feedback_label.configure(text="ملاحظات (اختياري):")
+        self.submit_feedback_button.configure(text="إرسال الملاحظات")
+
+    def translate_to_french(self):
+        self.input_label.configure(text="Texte d'entrée :")
+        self.lang_label.configure(text="Sélectionnez la langue d'entrée :")
+        self.output_lang_label.configure(text="Sélectionnez la langue de sortie :")
+        self.quality_label.configure(text="Sélectionnez le mode de qualité :")
+        self.input_token_label.configure(text="Limite de tokens d'entrée :")
+        self.output_token_label.configure(text="Limite de tokens de sortie :")
+        self.output_label.configure(text="Texte de sortie :")
+        self.submit_button.configure(text="Soumettre")
+        self.submit_text_button.configure(text="Soumettre")
+        self.record_button.configure(text="Enregistrer")
+        self.stop_button.configure(text="Arrêter l'enregistrement")
+        self.speak_button.configure(text="Lire le texte de sortie à haute voix")
+        self.play_button.configure(text="▶ Jouer")
+        self.pause_button.configure(text="⏸ Pause")
+        self.replay_button.configure(text="⏪ Rejouer")
+        self.report_button.configure(text="Générer le rapport")
+        self.user_info_label.configure(text=f"Connecté en tant que : {self.username}")
+        self.logout_button.configure(text="Se déconnecter")
+        self.recording_label.configure(text="Enregistrement... Veuillez parler dans le microphone")
+        self.feedback_label.configure(text="Commentaires (Optionnel) :")
+        self.submit_feedback_button.configure(text="Soumettre les commentaires")
+
+    def translate_to_darija(self):
+        self.input_label.configure(text="النص المدخل:")
+        self.lang_label.configure(text="اختار لغة الإدخال:")
+        self.output_lang_label.configure(text="اختار لغة الإخراج:")
+        self.quality_label.configure(text="اختار وضع الجودة:")
+        self.input_token_label.configure(text="حد المدخلات:")
+        self.output_token_label.configure(text="حد المخرجات:")
+        self.output_label.configure(text="النص الإخراج:")
+        self.submit_button.configure(text="إرسال")
+        self.submit_text_button.configure(text="إرسال")
+        self.record_button.configure(text="تسجيل")
+        self.stop_button.configure(text="إيقاف التسجيل")
+        self.speak_button.configure(text="قراءة الإخراج بصوت عالي")
+        self.play_button.configure(text="▶ تشغيل")
+        self.pause_button.configure(text="⏸ إيقاف مؤقت")
+        self.replay_button.configure(text="⏪ إعادة التشغيل")
+        self.report_button.configure(text="توليد التقرير")
+        self.user_info_label.configure(text=f"مسجل الدخول: {self.username}")
+        self.logout_button.configure(text="تسجيل الخروج")
+        self.recording_label.configure(text="تسجيل... المرجو التحدث في الميكروفون")
+        self.feedback_label.configure(text="ملاحظات (اختياري):")
+        self.submit_feedback_button.configure(text="إرسال الملاحظات")
 
     def show_main_window(self):
         """Display the main application window."""
-        style = ttk.Style(self)
-        style.configure("TLabel", font=("Helvetica", 12))
-        style.configure("TButton", font=("Helvetica", 12), padding=5)
-        style.configure("TCombobox", font=("Helvetica", 12))
-        style.configure("TScrolledText", font=("Helvetica", 12))
-
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         self.grid_columnconfigure(2, weight=1)
 
-        self.input_label = ttk.Label(self, text="Input Text:")
+        self.input_label = ctk.CTkLabel(self, text="Input Text:", font=("Times New Roman", 12))
         self.input_label.grid(row=0, column=0, pady=5, sticky='nsew')
-        self.input_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=10)
+        self.input_text = ctk.CTkTextbox(self, wrap='word', width=600, height=200, font=("Times New Roman", 12))
         self.input_text.grid(row=1, column=0, padx=5, pady=5, sticky='nsew')
 
-        self.lang_label = ttk.Label(self, text="Select Input Language:")
+        self.lang_label = ctk.CTkLabel(self, text="Select Input Language:", font=("Times New Roman", 12))
         self.lang_label.grid(row=2, column=0, pady=5, sticky='nsew')
-        self.input_lang = ttk.Combobox(self, values=["ar", "fr", "dar"])
+        self.input_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Times New Roman", 12))
         self.input_lang.grid(row=3, column=0, pady=5, sticky='nsew')
         
-        self.output_lang_label = ttk.Label(self, text="Select Output Language:")
+        self.output_lang_label = ctk.CTkLabel(self, text="Select Output Language:", font=("Times New Roman", 12))
         self.output_lang_label.grid(row=4, column=0, pady=5, sticky='nsew')
-        self.output_lang = ttk.Combobox(self, values=["ar", "fr", "dar"])
+        self.output_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Times New Roman", 12))
         self.output_lang.grid(row=5, column=0, pady=5, sticky='nsew')
         
-        self.quality_label = ttk.Label(self, text="Select Quality Mode:")
+        self.quality_label = ctk.CTkLabel(self, text="Select Quality Mode:", font=("Times New Roman", 12))
         self.quality_label.grid(row=6, column=0, pady=5, sticky='nsew')
-        self.quality_mode = ttk.Combobox(self, values=["economy", "good", "premium"])
+        self.quality_mode = ctk.CTkComboBox(self, values=["economy", "good", "premium"], font=("Times New Roman", 12))
         self.quality_mode.grid(row=7, column=0, pady=5, sticky='nsew')
 
-        self.input_token_label = ttk.Label(self, text="Input Token Limit:")
+        self.input_token_label = ctk.CTkLabel(self, text="Input Token Limit:", font=("Times New Roman", 12))
         self.input_token_label.grid(row=8, column=0, pady=5, sticky='nsew')
-        self.input_token_limit = tk.Entry(self)
+        self.input_token_limit = ctk.CTkEntry(self, font=("Times New Roman", 12))
         self.input_token_limit.grid(row=9, column=0, pady=5, sticky='nsew')
         self.input_token_limit.insert(0, "800")
 
-        self.output_token_label = ttk.Label(self, text="Output Token Limit:")
+        self.output_token_label = ctk.CTkLabel(self, text="Output Token Limit:", font=("Times New Roman", 12))
         self.output_token_label.grid(row=10, column=0, pady=5, sticky='nsew')
-        self.output_token_limit = tk.Entry(self)
+        self.output_token_limit = ctk.CTkEntry(self, font=("Times New Roman", 12))
         self.output_token_limit.grid(row=11, column=0, pady=5, sticky='nsew')
         self.output_token_limit.insert(0, "500")
 
-        self.output_label = ttk.Label(self, text="Output Text:")
+        self.submit_button = ctk.CTkButton(self, text="Submit", command=self.process_input, font=("Times New Roman", 12))
+        self.submit_button.grid(row=12, column=0, pady=5)
+
+        self.output_label = ctk.CTkLabel(self, text="Output Text:", font=("Times New Roman", 12))
         self.output_label.grid(row=0, column=2, pady=5, sticky='nsew')
-        self.output_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=20)
-        self.output_text.grid(row=1, column=2, padx=5, pady=5, rowspan=5, sticky='nsew')
+        self.output_text = ctk.CTkTextbox(self, wrap='word', width=800, height=300, font=("Times New Roman", 12))
+        self.output_text.grid(row=1, column=2, padx=5, pady=5, sticky='nsew')
 
-        self.submit_button = ttk.Button(self, text="Submit", command=self.process_input)
-        self.submit_button.grid(row=1, column=1, pady=5)
-
-        self.record_button = ttk.Button(self, text="Record", command=self.start_recording)
+        self.record_button = ctk.CTkButton(self, text="Record", command=self.start_recording, font=("Times New Roman", 12))
         self.record_button.grid(row=2, column=1, pady=5)
 
-        self.stop_button = ttk.Button(self, text="Stop Recording", command=self.stop_recording)
+        self.stop_button = ctk.CTkButton(self, text="Stop Recording", command=self.stop_recording, font=("Times New Roman", 12))
         self.stop_button.grid(row=3, column=1, pady=5)
-        self.stop_button.config(state="disabled")
+        self.stop_button.configure(state="disabled")
 
-        self.speak_button = ttk.Button(self, text="Read Aloud Output", command=self.read_aloud_output)
+        self.speak_button = ctk.CTkButton(self, text="Read Aloud Output", command=self.read_aloud_output, font=("Times New Roman", 12))
         self.speak_button.grid(row=4, column=1, pady=5)
 
-        self.play_button = ttk.Button(self, text="▶ Play", command=play_audio)
+        self.play_button = ctk.CTkButton(self, text="▶ Play", command=play_audio, font=("Times New Roman", 12))
         self.play_button.grid(row=5, column=1, pady=5)
 
-        self.pause_button = ttk.Button(self, text="⏸ Pause", command=pause_audio)
+        self.pause_button = ctk.CTkButton(self, text="⏸ Pause", command=pause_audio, font=("Times New Roman", 12))
         self.pause_button.grid(row=6, column=1, pady=5)
 
-        self.replay_button = ttk.Button(self, text="⏪ Replay", command=replay_audio)
+        self.replay_button = ctk.CTkButton(self, text="⏪ Replay", command=replay_audio, font=("Times New Roman", 12))
         self.replay_button.grid(row=7, column=1, pady=5)
 
-        self.report_button = ttk.Button(self, text="Generate Report", command=self.display_report)
+        self.report_button = ctk.CTkButton(self, text="Generate Report", command=self.display_report, font=("Times New Roman", 12))
         self.report_button.grid(row=8, column=1, pady=5)
 
-        self.user_info_label = ttk.Label(self, text=f"Logged in as: {self.username}")
-        self.user_info_label.grid(row=9, column=0, pady=5, sticky='w')
+        self.user_info_label = ctk.CTkLabel(self, text=f"Logged in as: {self.username}", font=("Times New Roman", 12))
+        self.user_info_label.grid(row=9, column=1, pady=5, sticky='w')
 
-        self.logout_button = ttk.Button(self, text="Logout", command=self.logout)
+        self.logout_button = ctk.CTkButton(self, text="Logout", command=self.logout, font=("Times New Roman", 12))
         self.logout_button.grid(row=9, column=2, pady=5, sticky='e')
 
-        self.recording_label = ttk.Label(self, text="Recording... Please speak into the microphone", foreground="red", font=("Helvetica", 10))
+        self.recording_label = ctk.CTkLabel(self, text="Recording... Please speak into the microphone", text_color="red", font=("Times New Roman", 12))
         self.recording_label.grid(row=10, column=0, columnspan=3, pady=5)
         self.recording_label.grid_remove()
 
-        self.transcription_label = ttk.Label(self, text="", foreground="blue", font=("Helvetica", 10))
+        self.transcription_label = ctk.CTkLabel(self, text="", text_color="blue", font=("Times New Roman", 12))
         self.transcription_label.grid(row=11, column=0, columnspan=3, pady=5)
         self.transcription_label.grid_remove()
 
-        self.feedback_label = ttk.Label(self, text="Feedback (Optional):")
+        self.feedback_label = ctk.CTkLabel(self, text="Feedback (Optional):", font=("Times New Roman", 12))
         self.feedback_label.grid(row=12, column=0, pady=5, sticky='nsew')
-        self.feedback_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=5)
+        self.feedback_text = ctk.CTkTextbox(self, wrap='word', width=40, height=10, font=("Times New Roman", 12))
         self.feedback_text.grid(row=13, column=0, padx=5, pady=5, sticky='nsew')
 
-        self.submit_feedback_button = ttk.Button(self, text="Submit Feedback", command=self.submit_feedback)
+        self.submit_feedback_button = ctk.CTkButton(self, text="Submit Feedback", command=self.submit_feedback, font=("Times New Roman", 12))
         self.submit_feedback_button.grid(row=14, column=0, pady=5)
+
+        self.submit_text_button = ctk.CTkButton(self, text="Submit Text", command=self.process_input, font=("Times New Roman", 12))
+        self.submit_text_button.grid(row=12, column=1, pady=5)
 
     def logout(self):
         """Handle user logout."""
@@ -574,30 +741,41 @@ class Application(tk.Tk):
 
     def process_input(self):
         """Process the text input."""
-        user_input = self.input_text.get("1.0", tk.END).strip()
+        user_input = self.input_text.get("1.0", 'end').strip()
         input_lang = self.input_lang.get()
         output_lang = self.output_lang.get()
         quality_mode = self.quality_mode.get()
-        input_token_limit = int(self.input_token_limit.get())
-        output_token_limit = int(self.output_token_limit.get())
+        input_token_limit = self.validate_token_limit(self.input_token_limit.get())
+        output_token_limit = self.validate_token_limit(self.output_token_limit.get())
 
         if not user_input or not input_lang or not output_lang or not quality_mode:
             messagebox.showerror("Error", "All fields must be filled")
             return
         
-        # Check if the prompt is already in the cache
-        cache_key = f"{input_lang}:{output_lang}:{user_input}"
+        if input_token_limit is None or output_token_limit is None:
+            messagebox.showerror("Error", "Token limits must be valid integers")
+            return
+
+        # Create a unique cache key based on user details, LLM mode, and input
+        cache_key = f"{self.username}:{quality_mode}:{input_lang}:{output_lang}:{user_input}"
         if cache_key in self.cache:
             response_text = self.cache[cache_key]
             self.update_output_text(response_text)
         else:
             Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit)).start()
 
+
+    def validate_token_limit(self, token_limit):
+        try:
+            return int(token_limit)
+        except ValueError:
+            return None
+
     def start_recording(self):
         """Start recording audio."""
         self.recording = True
-        self.record_button.config(state="disabled")
-        self.stop_button.config(state="normal")
+        self.record_button.configure(state="disabled")
+        self.stop_button.configure(state="normal")
         self.recording_label.grid()
 
         Thread(target=self.record_audio).start()
@@ -605,8 +783,8 @@ class Application(tk.Tk):
     def stop_recording(self):
         """Stop recording audio."""
         self.recording = False
-        self.record_button.config(state="normal")
-        self.stop_button.config(state="disabled")
+        self.record_button.configure(state="normal")
+        self.stop_button.configure(state="disabled")
         self.recording_label.grid_remove()
 
     def record_audio(self):
@@ -656,50 +834,58 @@ class Application(tk.Tk):
 
     def run_user_input_choice(self, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit):
         """Run the user input choice function in a separate thread."""
-        if input_type == "voice":
-            response_text = generate_response(user_input, "agriculture_ar" if input_lang == "ar" else "agriculture_fr", quality_mode, input_token_limit, output_token_limit)
-            if output_lang == "dar":
-                response_text = translate_to_darija(response_text)
-            elif input_lang != output_lang:
-                response_text = translate_text(response_text, output_lang)
-        else:
-            response_text = user_input_choice(input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit)
+        collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
         
-        if output_lang == "ar":
-            response_text = format_rtl_text(response_text)
+        if not collection_exists(collection_name):
+            response_text = f"The collection '{collection_name}' does not exist. Please ensure the data is processed and the collection is created."
+        else:
+            if input_type == "voice":
+                response_text = generate_response(user_input, collection_name, quality_mode, input_token_limit, output_token_limit)
+                if output_lang == "dar":
+                    response_text = translate_to_darija(response_text)
+                elif input_lang != output_lang:
+                    response_text = translate_text(response_text, output_lang)
+            else:
+                response_text = user_input_choice(input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit)
+            
+            if output_lang == "ar":
+                response_text = format_rtl_text(response_text)
         
         self.cache[cache_key] = response_text  # Cache the response
         save_cache(self.cache)  # Save the updated cache
         self.after(0, self.update_output_text, response_text)
+
+
     
     def update_output_text(self, response_text):
         """Update the output text widget."""
-        self.output_text.delete("1.0", tk.END)
-        self.output_text.insert(tk.END, response_text)
+        self.output_text.delete("1.0", 'end')
+        self.output_text.insert('end', response_text)
 
     def update_transcription_label(self, transcription):
         """Update the transcription label."""
-        self.transcription_label.config(text=f"Transcription: {transcription}")
+        self.transcription_label.configure(text=f"Transcription: {transcription}")
 
     def read_aloud_output(self):
         """Read aloud the output text."""
         output_lang = self.output_lang.get()
-        response_text = self.output_text.get("1.0", tk.END).strip()
+        response_text = self.output_text.get("1.0", 'end').strip()
         if response_text:
             Thread(target=text_to_speech, args=(response_text, output_lang)).start()
 
     def display_report(self):
         """Display the interaction report."""
         report = generate_report()
-        report_window = tk.Toplevel(self)
+        report_window = ctk.CTkToplevel(self)
         report_window.title("Interaction Report")
-        report_text = scrolledtext.ScrolledText(report_window, wrap=tk.WORD, width=100, height=20, font=("Helvetica", 10))
+        report_window.iconbitmap("icon.ico")
+        report_text = ctk.CTkTextbox(report_window, wrap='word', width=100, height=20, font=("Times New Roman", 12))
         report_text.pack(padx=10, pady=10)
-        report_text.insert(tk.END, report.to_string())
+        report_text.insert('end', report.to_string())
 
     def submit_feedback(self):
         """Submit feedback for the generated response."""
-        feedback = self.feedback_text.get("1.0", tk.END).strip()
+        feedback = self.feedback_text.get("1.0", 'end').strip()
         if not feedback:
             messagebox.showerror("Error", "Feedback cannot be empty")
             return
@@ -719,13 +905,30 @@ class Application(tk.Tk):
             mlflow.log_metric("timestamp", log_data["timestamp"])
 
         messagebox.showinfo("Success", "Feedback submitted successfully")
-        self.feedback_text.delete("1.0", tk.END)
+        self.feedback_text.delete("1.0", 'end')
+
 
 if __name__ == "__main__":
     def run_flask_app():
         process_pdfs(PDF_DIRECTORY)
-        vectorize_and_store(OUTPUT_CSV_AR, "agriculture_ar")
-        vectorize_and_store(OUTPUT_CSV_FR, "agriculture_fr")
+        
+        # Check CSV content
+        check_csv_content()
+        
+        # Ensure 'agriculture_ar' collection is created
+        if not collection_exists("agriculture_ar"):
+            try:
+                vectorize_and_store(OUTPUT_CSV_AR, "agriculture_ar")
+            except Exception as e:
+                print(f"Error creating 'agriculture_ar' collection: {e}")
+
+        # Ensure 'agriculture_fr' collection is created
+        if not collection_exists("agriculture_fr"):
+            try:
+                vectorize_and_store(OUTPUT_CSV_FR, "agriculture_fr")
+            except Exception as e:
+                print(f"Error creating 'agriculture_fr' collection: {e}")
+                
         flask_app.run(debug=False)
 
     Thread(target=run_flask_app).start()

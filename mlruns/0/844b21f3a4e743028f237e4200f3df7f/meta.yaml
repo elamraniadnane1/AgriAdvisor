@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/844b21f3a4e743028f237e4200f3df7f/artifacts
+deleted_time: 1721393002394
+end_time: 1721156080293
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 844b21f3a4e743028f237e4200f3df7f
+run_name: flawless-goat-630
+run_uuid: 844b21f3a4e743028f237e4200f3df7f
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721156080177
+status: 3
+tags: []
+user_id: LENOVO

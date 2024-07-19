@@ -45,12 +45,25 @@ login_manager.init_app(flask_app)
 
 # In-memory user store
 users = {}
+USERS_FILE = 'users.json'
 
 class User(UserMixin):
     def __init__(self, id, username, password):
         self.id = id
         self.username = username
         self.password = password
+
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r', encoding='utf-8') as file:
+            user_data = json.load(file)
+            for user_id, data in user_data.items():
+                users[user_id] = User(user_id, data['username'], data['password'])
+load_users()
+
+def save_users():
+    with open(USERS_FILE, 'w', encoding='utf-8') as file:
+        json.dump({user_id: {'username': user.username, 'password': user.password} for user_id, user in users.items()}, file, ensure_ascii=False, indent=4)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -65,6 +78,7 @@ def register():
     password = hash_password(request.json['password'])
     user_id = str(uuid.uuid4())
     users[user_id] = User(user_id, username, password)
+    save_users()
     return jsonify({'message': 'User registered successfully'}), 201
 
 @flask_app.route('/login', methods=['POST'])
@@ -287,9 +301,10 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
     max_tokens = 500
     
     if quality_mode == "premium":
-        model = "gpt-4"
+        model = "gpt-4o"
         max_tokens = 2000
     elif quality_mode == "economy":
+        model = "gpt-4"
         max_tokens = 100
 
     # Truncate input question based on token limit
@@ -407,8 +422,8 @@ class Application(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("AI AgriAdvisor")
-        self.geometry("1000x800")
-        self.iconbitmap('icon.ico')  # Ensure you have an icon file named 'icon.ico'
+        self.geometry("800x600")
+        self.iconbitmap("icon.ico")
 
         self.username = None
         self.recording = False
@@ -423,28 +438,39 @@ class Application(tk.Tk):
         """Display the login window."""
         self.login_window = tk.Toplevel(self)
         self.login_window.title("Login")
+        self.login_window.geometry("300x200")
+        self.login_window.iconbitmap("icon.ico")
 
-        tk.Label(self.login_window, text="Username", font=("Helvetica", 12)).grid(row=0, column=0, padx=10, pady=10)
-        tk.Label(self.login_window, text="Password", font=("Helvetica", 12)).grid(row=1, column=0, padx=10, pady=10)
+        tk.Label(self.login_window, text="Username", font=("Times New Roman", 9)).grid(row=0, column=0, padx=10, pady=10)
+        tk.Label(self.login_window, text="Password", font=("Times New Roman", 9)).grid(row=1, column=0, padx=10, pady=10)
 
-        self.username_entry = tk.Entry(self.login_window, font=("Helvetica", 12))
-        self.password_entry = tk.Entry(self.login_window, show='*', font=("Helvetica", 12))
+        self.username_entry = tk.Entry(self.login_window, font=("Times New Roman", 9))
+        self.password_entry = tk.Entry(self.login_window, show='*', font=("Times New Roman", 9))
 
         self.username_entry.grid(row=0, column=1, padx=10, pady=10)
         self.password_entry.grid(row=1, column=1, padx=10, pady=10)
 
-        tk.Button(self.login_window, text="Login", command=self.login, font=("Helvetica", 12)).grid(row=2, column=0, columnspan=2, pady=10)
-        tk.Button(self.login_window, text="Register", command=self.register, font=("Helvetica", 12)).grid(row=3, column=0, columnspan=2, pady=10)
+        tk.Label(self.login_window, text="Language", font=("Times New Roman", 9)).grid(row=2, column=0, padx=10, pady=10)
+        self.language_var = tk.StringVar()
+        self.language_combobox = ttk.Combobox(self.login_window, textvariable=self.language_var, values=["AR", "FR", "DAR"], font=("Times New Roman", 9))
+        self.language_combobox.grid(row=2, column=1, padx=10, pady=10)
+        self.language_combobox.current(0)
+
+        tk.Button(self.login_window, text="Login", command=self.login, font=("Times New Roman", 9)).grid(row=3, column=0, columnspan=2, pady=10)
+        tk.Button(self.login_window, text="Register", command=self.register, font=("Times New Roman", 9)).grid(row=4, column=0, columnspan=2, pady=10)
 
     def login(self):
         """Handle user login."""
         username = self.username_entry.get()
         password = self.password_entry.get()
+        language = self.language_var.get()
 
         if self.authenticate(username, password):
             self.username = username
+            self.language = language
             self.login_window.destroy()
             self.show_main_window()
+            self.translate_app()
         else:
             messagebox.showerror("Error", "Invalid credentials")
 
@@ -467,15 +493,91 @@ class Application(tk.Tk):
             hashed_password = hash_password(password)
             user_id = str(uuid.uuid4())
             users[user_id] = User(user_id, username, hashed_password)
+            save_users()
             messagebox.showinfo("Success", "User registered successfully")
+
+    def translate_app(self):
+        """Translate the application based on the selected language."""
+        if self.language == "AR":
+            self.translate_to_arabic()
+        elif self.language == "FR":
+            self.translate_to_french()
+        elif self.language == "DAR":
+            self.translate_to_darija()
+
+    def translate_to_arabic(self):
+        self.input_label.config(text="نص المدخلات:")
+        self.lang_label.config(text="اختر لغة الإدخال:")
+        self.output_lang_label.config(text="اختر لغة الإخراج:")
+        self.quality_label.config(text="اختر وضع الجودة:")
+        self.input_token_label.config(text="حد المدخلات:")
+        self.output_token_label.config(text="حد المخرجات:")
+        self.output_label.config(text="نص الإخراج:")
+        self.submit_button.config(text="إرسال")
+        self.record_button.config(text="تسجيل")
+        self.stop_button.config(text="إيقاف التسجيل")
+        self.speak_button.config(text="قراءة الإخراج بصوت عال")
+        self.play_button.config(text="▶ تشغيل")
+        self.pause_button.config(text="⏸ إيقاف مؤقت")
+        self.replay_button.config(text="⏪ إعادة التشغيل")
+        self.report_button.config(text="توليد التقرير")
+        self.user_info_label.config(text=f"مسجل الدخول: {self.username}")
+        self.logout_button.config(text="تسجيل الخروج")
+        self.recording_label.config(text="تسجيل... يرجى التحدث في الميكروفون")
+        self.feedback_label.config(text="ملاحظات (اختياري):")
+        self.submit_feedback_button.config(text="إرسال الملاحظات")
+
+    def translate_to_french(self):
+        self.input_label.config(text="Texte d'entrée :")
+        self.lang_label.config(text="Sélectionnez la langue d'entrée :")
+        self.output_lang_label.config(text="Sélectionnez la langue de sortie :")
+        self.quality_label.config(text="Sélectionnez le mode de qualité :")
+        self.input_token_label.config(text="Limite de tokens d'entrée :")
+        self.output_token_label.config(text="Limite de tokens de sortie :")
+        self.output_label.config(text="Texte de sortie :")
+        self.submit_button.config(text="Soumettre")
+        self.record_button.config(text="Enregistrer")
+        self.stop_button.config(text="Arrêter l'enregistrement")
+        self.speak_button.config(text="Lire le texte de sortie à haute voix")
+        self.play_button.config(text="▶ Jouer")
+        self.pause_button.config(text="⏸ Pause")
+        self.replay_button.config(text="⏪ Rejouer")
+        self.report_button.config(text="Générer le rapport")
+        self.user_info_label.config(text=f"Connecté en tant que : {self.username}")
+        self.logout_button.config(text="Se déconnecter")
+        self.recording_label.config(text="Enregistrement... Veuillez parler dans le microphone")
+        self.feedback_label.config(text="Commentaires (Optionnel) :")
+        self.submit_feedback_button.config(text="Soumettre les commentaires")
+
+    def translate_to_darija(self):
+        self.input_label.config(text="النص المدخل:")
+        self.lang_label.config(text="اختار لغة الإدخال:")
+        self.output_lang_label.config(text="اختار لغة الإخراج:")
+        self.quality_label.config(text="اختار وضع الجودة:")
+        self.input_token_label.config(text="حد المدخلات:")
+        self.output_token_label.config(text="حد المخرجات:")
+        self.output_label.config(text="النص الإخراج:")
+        self.submit_button.config(text="إرسال")
+        self.record_button.config(text="تسجيل")
+        self.stop_button.config(text="إيقاف التسجيل")
+        self.speak_button.config(text="قراءة الإخراج بصوت عالي")
+        self.play_button.config(text="▶ تشغيل")
+        self.pause_button.config(text="⏸ إيقاف مؤقت")
+        self.replay_button.config(text="⏪ إعادة التشغيل")
+        self.report_button.config(text="توليد التقرير")
+        self.user_info_label.config(text=f"مسجل الدخول: {self.username}")
+        self.logout_button.config(text="تسجيل الخروج")
+        self.recording_label.config(text="تسجيل... المرجو التحدث في الميكروفون")
+        self.feedback_label.config(text="ملاحظات (اختياري):")
+        self.submit_feedback_button.config(text="إرسال الملاحظات")
 
     def show_main_window(self):
         """Display the main application window."""
         style = ttk.Style(self)
-        style.configure("TLabel", font=("Helvetica", 12))
-        style.configure("TButton", font=("Helvetica", 12), padding=5)
-        style.configure("TCombobox", font=("Helvetica", 12))
-        style.configure("TScrolledText", font=("Helvetica", 12))
+        style.configure("TLabel", font=("Times New Roman", 9))
+        style.configure("TButton", font=("Times New Roman", 9), padding=5)
+        style.configure("TCombobox", font=("Times New Roman", 9))
+        style.configure("TScrolledText", font=("Times New Roman", 9))
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -483,43 +585,43 @@ class Application(tk.Tk):
 
         self.input_label = ttk.Label(self, text="Input Text:")
         self.input_label.grid(row=0, column=0, pady=5, sticky='nsew')
-        self.input_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=10)
+        self.input_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=10, font=("Times New Roman", 9))
         self.input_text.grid(row=1, column=0, padx=5, pady=5, sticky='nsew')
 
         self.lang_label = ttk.Label(self, text="Select Input Language:")
         self.lang_label.grid(row=2, column=0, pady=5, sticky='nsew')
-        self.input_lang = ttk.Combobox(self, values=["ar", "fr", "dar"])
+        self.input_lang = ttk.Combobox(self, values=["ar", "fr", "dar"], font=("Times New Roman", 9))
         self.input_lang.grid(row=3, column=0, pady=5, sticky='nsew')
         
         self.output_lang_label = ttk.Label(self, text="Select Output Language:")
         self.output_lang_label.grid(row=4, column=0, pady=5, sticky='nsew')
-        self.output_lang = ttk.Combobox(self, values=["ar", "fr", "dar"])
+        self.output_lang = ttk.Combobox(self, values=["ar", "fr", "dar"], font=("Times New Roman", 9))
         self.output_lang.grid(row=5, column=0, pady=5, sticky='nsew')
         
         self.quality_label = ttk.Label(self, text="Select Quality Mode:")
         self.quality_label.grid(row=6, column=0, pady=5, sticky='nsew')
-        self.quality_mode = ttk.Combobox(self, values=["economy", "good", "premium"])
+        self.quality_mode = ttk.Combobox(self, values=["economy", "good", "premium"], font=("Times New Roman", 9))
         self.quality_mode.grid(row=7, column=0, pady=5, sticky='nsew')
 
         self.input_token_label = ttk.Label(self, text="Input Token Limit:")
         self.input_token_label.grid(row=8, column=0, pady=5, sticky='nsew')
-        self.input_token_limit = tk.Entry(self)
+        self.input_token_limit = tk.Entry(self, font=("Times New Roman", 9))
         self.input_token_limit.grid(row=9, column=0, pady=5, sticky='nsew')
         self.input_token_limit.insert(0, "800")
 
         self.output_token_label = ttk.Label(self, text="Output Token Limit:")
         self.output_token_label.grid(row=10, column=0, pady=5, sticky='nsew')
-        self.output_token_limit = tk.Entry(self)
+        self.output_token_limit = tk.Entry(self, font=("Times New Roman", 9))
         self.output_token_limit.grid(row=11, column=0, pady=5, sticky='nsew')
         self.output_token_limit.insert(0, "500")
 
+        self.submit_button = ttk.Button(self, text="Submit", command=self.process_input)
+        self.submit_button.grid(row=12, column=0, pady=5)
+
         self.output_label = ttk.Label(self, text="Output Text:")
         self.output_label.grid(row=0, column=2, pady=5, sticky='nsew')
-        self.output_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=20)
-        self.output_text.grid(row=1, column=2, padx=5, pady=5, rowspan=5, sticky='nsew')
-
-        self.submit_button = ttk.Button(self, text="Submit", command=self.process_input)
-        self.submit_button.grid(row=1, column=1, pady=5)
+        self.output_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=10, font=("Times New Roman", 9))
+        self.output_text.grid(row=1, column=2, padx=5, pady=5, sticky='nsew')
 
         self.record_button = ttk.Button(self, text="Record", command=self.start_recording)
         self.record_button.grid(row=2, column=1, pady=5)
@@ -543,27 +645,30 @@ class Application(tk.Tk):
         self.report_button = ttk.Button(self, text="Generate Report", command=self.display_report)
         self.report_button.grid(row=8, column=1, pady=5)
 
-        self.user_info_label = ttk.Label(self, text=f"Logged in as: {self.username}")
-        self.user_info_label.grid(row=9, column=0, pady=5, sticky='w')
+        self.user_info_label = ttk.Label(self, text=f"Logged in as: {self.username}", font=("Times New Roman", 9))
+        self.user_info_label.grid(row=9, column=1, pady=5, sticky='w')
 
         self.logout_button = ttk.Button(self, text="Logout", command=self.logout)
         self.logout_button.grid(row=9, column=2, pady=5, sticky='e')
 
-        self.recording_label = ttk.Label(self, text="Recording... Please speak into the microphone", foreground="red", font=("Helvetica", 10))
+        self.recording_label = ttk.Label(self, text="Recording... Please speak into the microphone", foreground="red", font=("Times New Roman", 9))
         self.recording_label.grid(row=10, column=0, columnspan=3, pady=5)
         self.recording_label.grid_remove()
 
-        self.transcription_label = ttk.Label(self, text="", foreground="blue", font=("Helvetica", 10))
+        self.transcription_label = ttk.Label(self, text="", foreground="blue", font=("Times New Roman", 9))
         self.transcription_label.grid(row=11, column=0, columnspan=3, pady=5)
         self.transcription_label.grid_remove()
 
-        self.feedback_label = ttk.Label(self, text="Feedback (Optional):")
+        self.feedback_label = ttk.Label(self, text="Feedback (Optional):", font=("Times New Roman", 9))
         self.feedback_label.grid(row=12, column=0, pady=5, sticky='nsew')
-        self.feedback_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=5)
+        self.feedback_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=5, font=("Times New Roman", 9))
         self.feedback_text.grid(row=13, column=0, padx=5, pady=5, sticky='nsew')
 
         self.submit_feedback_button = ttk.Button(self, text="Submit Feedback", command=self.submit_feedback)
         self.submit_feedback_button.grid(row=14, column=0, pady=5)
+
+        self.submit_text_button = ttk.Button(self, text="Submit Text", command=self.process_input)
+        self.submit_text_button.grid(row=12, column=1, pady=5)
 
     def logout(self):
         """Handle user logout."""
@@ -578,13 +683,17 @@ class Application(tk.Tk):
         input_lang = self.input_lang.get()
         output_lang = self.output_lang.get()
         quality_mode = self.quality_mode.get()
-        input_token_limit = int(self.input_token_limit.get())
-        output_token_limit = int(self.output_token_limit.get())
+        input_token_limit = self.validate_token_limit(self.input_token_limit.get())
+        output_token_limit = self.validate_token_limit(self.output_token_limit.get())
 
         if not user_input or not input_lang or not output_lang or not quality_mode:
             messagebox.showerror("Error", "All fields must be filled")
             return
         
+        if input_token_limit is None or output_token_limit is None:
+            messagebox.showerror("Error", "Token limits must be valid integers")
+            return
+
         # Check if the prompt is already in the cache
         cache_key = f"{input_lang}:{output_lang}:{user_input}"
         if cache_key in self.cache:
@@ -592,6 +701,12 @@ class Application(tk.Tk):
             self.update_output_text(response_text)
         else:
             Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit)).start()
+
+    def validate_token_limit(self, token_limit):
+        try:
+            return int(token_limit)
+        except ValueError:
+            return None
 
     def start_recording(self):
         """Start recording audio."""
@@ -693,7 +808,8 @@ class Application(tk.Tk):
         report = generate_report()
         report_window = tk.Toplevel(self)
         report_window.title("Interaction Report")
-        report_text = scrolledtext.ScrolledText(report_window, wrap=tk.WORD, width=100, height=20, font=("Helvetica", 10))
+        report_window.iconbitmap("icon.ico")
+        report_text = scrolledtext.ScrolledText(report_window, wrap=tk.WORD, width=100, height=20, font=("Times New Roman", 9))
         report_text.pack(padx=10, pady=10)
         report_text.insert(tk.END, report.to_string())
 

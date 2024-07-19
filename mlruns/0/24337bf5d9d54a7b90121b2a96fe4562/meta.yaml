@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/24337bf5d9d54a7b90121b2a96fe4562/artifacts
+deleted_time: 1721393002394
+end_time: 1721099248574
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 24337bf5d9d54a7b90121b2a96fe4562
+run_name: masked-robin-118
+run_uuid: 24337bf5d9d54a7b90121b2a96fe4562
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721099248409
+status: 3
+tags: []
+user_id: LENOVO

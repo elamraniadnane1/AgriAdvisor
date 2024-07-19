@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/a968cfd537e3412ca9242982ce9f8027/artifacts
+deleted_time: 1721393002395
 end_time: 1720623216480
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: a968cfd537e3412ca9242982ce9f8027
 run_name: secretive-ant-608
 run_uuid: a968cfd537e3412ca9242982ce9f8027
