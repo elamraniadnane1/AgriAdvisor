@@ -1,0 +1,68 @@
+{
+    "questions": [
+        {
+            "id": 1,
+            "question": "What does the 'compute_f1_score' function do?",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "medium"
+            }
+        },
+        {
+            "id": 2,
+            "question": "How does the 'generate_response' function determine which model to use?",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "hard"
+            }
+        },
+        {
+            "id": 3,
+            "question": "What is the purpose of the 'truncate_text' function?",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "easy"
+            }
+        },
+        {
+            "id": 4,
+            "question": "Describe the process of vectorizing and storing data using the 'vectorize_and_store' function.",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "hard"
+            }
+        },
+        {
+            "id": 5,
+            "question": "What is the role of the 'translate_to_darija' function?",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "medium"
+            }
+        },
+        {
+            "id": 6,
+            "question": "Explain the purpose of the 'user_input_choice' function.",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "medium"
+            }
+        },
+        {
+            "id": 7,
+            "question": "How does the Flask application handle user authentication?",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "medium"
+            }
+        },
+        {
+            "id": 8,
+            "question": "What is the function of the 'process_pdfs' function in the code?",
+            "metadata": {
+                "category": "code explanation",
+                "difficulty": "easy"
+            }
+        }
+    ]
+}

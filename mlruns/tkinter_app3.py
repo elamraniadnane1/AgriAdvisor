@@ -83,6 +83,10 @@ def query():
     collection_name = request.json['collection']
     response_text = generate_response(question, collection_name)
     return jsonify({'response': response_text}), 200
+@flask_app.route('/get_token', methods=['GET'])
+@login_required
+def get_token():
+    return jsonify({'token': current_user.id}), 200
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a PDF file."""

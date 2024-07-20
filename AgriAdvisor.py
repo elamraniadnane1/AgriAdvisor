@@ -1,3 +1,4 @@
+# Add a functionality to the GUI or API  to be able to upload a JSON file with questions and submit it to the OPENAI LLM to modify this json file and add the answers using the premium mode : 
 import os
 import uuid
 import hashlib
@@ -417,7 +418,7 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
 def translate_text(text, target_language):
     """Translate text to the target language using GPT-4."""
     response = openai.ChatCompletion.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": f"Translate the following text to {target_language}."},
             {"role": "user", "content": text}
@@ -429,7 +430,7 @@ def translate_text(text, target_language):
 def translate_to_darija(text):
     """Translate text to Moroccan Darija using GPT-4."""
     response = openai.ChatCompletion.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "Translate the following text to Moroccan Darija using Arabic letters."},
             {"role": "user", "content": text}
