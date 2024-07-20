@@ -1,4 +1,3 @@
-# Add a functionality to the GUI or API  to be able to upload a JSON file with questions and submit it to the OPENAI LLM to modify this json file and add the answers using the premium mode : 
 import os
 import uuid
 import hashlib
