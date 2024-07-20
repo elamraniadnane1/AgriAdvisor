@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/c33f45bb437d4dbfad6db367ad208bba/artifacts
+end_time: 1721422415295
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: c33f45bb437d4dbfad6db367ad208bba
+run_name: monumental-lynx-11
+run_uuid: c33f45bb437d4dbfad6db367ad208bba
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721422415179
+status: 3
+tags: []
+user_id: LENOVO

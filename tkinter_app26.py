@@ -22,7 +22,7 @@ import openai
 import mlflow
 import mlflow.pyfunc
 import customtkinter as ctk
-from tkinter import scrolledtext, messagebox, Scrollbar
+from tkinter import scrolledtext, messagebox, Scrollbar, simpledialog
 from threading import Thread, Lock
 from functools import lru_cache
 from PIL import Image, ImageTk
@@ -55,7 +55,6 @@ USERS_FILE = 'users.json'
 
 def compute_f1_score(true_text, predicted_text):
     """Compute F1 score for classification or prediction tasks."""
-    # Tokenize and create a simple binary classification
     true_tokens = true_text.split()
     pred_tokens = predicted_text.split()
     
@@ -156,7 +155,9 @@ CACHE_FILE = 'cache.json'
 def load_cache():
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, 'r', encoding='utf-8') as file:
-            return json.load(file)
+            content = file.read().strip()
+            if content:  # Check if file content is not empty
+                return json.loads(content)
     return {}
 
 def truncate_text(text, max_tokens):
@@ -371,16 +372,16 @@ def cached_query_qdrant(question, collection_name):
 
     return [hit.payload["content"] for hit in search_result]
 
-def generate_response(question, collection_name, quality_mode="good", input_token_limit=2000, output_token_limit=2000):
+def generate_response(question, collection_name, quality_mode="good", input_token_limit=2000, output_token_limit=2000, feedback=None):
     # Define model and max tokens based on quality mode
-    model = "gpt-3.5-turbo"
+    model = "gpt-4"
     max_tokens = 500
 
     if quality_mode == "premium":
         model = "gpt-4o"
         max_tokens = 2000
     elif quality_mode == "economy":
-        model = "gpt-4"
+        model = "gpt-3.5-turbo"
         max_tokens = 300
 
     # Truncate input question based on token limit
@@ -391,8 +392,13 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
     prompt = (
         "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
         + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
-        + f"\nNow answer the following question: {truncated_question}. Please provide a detailed and accurate response."
     )
+
+    # Incorporate feedback if available
+    if feedback:
+        prompt += f"\n\nUser feedback:\n{feedback}"
+
+    prompt += f"\nNow answer the following question: {truncated_question}. Please provide a detailed and accurate response."
 
     # Ensure the prompt is within the input token limit
     prompt = truncate_text(prompt, input_token_limit)
@@ -411,7 +417,7 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
 def translate_text(text, target_language):
     """Translate text to the target language using GPT-4."""
     response = openai.ChatCompletion.create(
-        model="gpt-4o",
+        model="gpt-4",
         messages=[
             {"role": "system", "content": f"Translate the following text to {target_language}."},
             {"role": "user", "content": text}
@@ -423,7 +429,7 @@ def translate_text(text, target_language):
 def translate_to_darija(text):
     """Translate text to Moroccan Darija using GPT-4."""
     response = openai.ChatCompletion.create(
-        model="gpt-4o",
+        model="gpt-4",
         messages=[
             {"role": "system", "content": "Translate the following text to Moroccan Darija using Arabic letters."},
             {"role": "user", "content": text}
@@ -432,13 +438,13 @@ def translate_to_darija(text):
     
     return response['choices'][0]['message']['content']
 
-def user_input_choice(input_lang, output_lang, user_input, input_type="text", quality_mode="good", input_token_limit=800, output_token_limit=500):
+def user_input_choice(input_lang, output_lang, user_input, input_type="text", quality_mode="good", input_token_limit=800, output_token_limit=500, feedback=None):
     """Process user input and generate a response."""
     if input_type == "voice":
         print("Please speak into the microphone...")
         speech_text = recognize_speech_from_microphone(language=input_lang)
         print(f"Recognized Speech: {speech_text}")
-        response_text = generate_response(speech_text, "agriculture_ar" if input_lang == "ar" else "agriculture_fr", quality_mode, input_token_limit, output_token_limit)
+        response_text = generate_response(speech_text, "agriculture_ar" if input_lang == "ar" else "agriculture_fr", quality_mode, input_token_limit, output_token_limit, feedback)
         if output_lang == "dar":
             response_text = translate_to_darija(response_text)
         elif input_lang != output_lang:
@@ -447,7 +453,7 @@ def user_input_choice(input_lang, output_lang, user_input, input_type="text", qu
         return response_text
     elif input_type == "text":
         print(f"Received Text: {user_input}")
-        response_text = generate_response(user_input, "agriculture_ar" if input_lang == "ar" else "agriculture_fr", quality_mode, input_token_limit, output_token_limit)
+        response_text = generate_response(user_input, "agriculture_ar" if input_lang == "ar" else "agriculture_fr", quality_mode, input_token_limit, output_token_limit, feedback)
         if output_lang == "dar":
             response_text = translate_to_darija(response_text)
         elif input_lang != output_lang:
@@ -505,6 +511,10 @@ class Application(ctk.CTk):
         self.recording = False
         self.frames = []
 
+        self.relevance_var = ctk.IntVar()
+        self.accuracy_var = ctk.IntVar()
+        self.fluency_var = ctk.IntVar()
+
         self.show_login_window()
 
         # Cache dictionary for storing prompts and their responses
@@ -524,23 +534,23 @@ class Application(ctk.CTk):
         ctk.CTkLabel(self.login_window, image=logo_photo, text="").grid(row=0, column=0, columnspan=2, pady=10)
         self.login_window.logo_photo = logo_photo  # Keep a reference to prevent garbage collection
 
-        ctk.CTkLabel(self.login_window, text="Username", font=("Times New Roman", 12)).grid(row=1, column=0, padx=10, pady=10)
-        ctk.CTkLabel(self.login_window, text="Password", font=("Times New Roman", 12)).grid(row=2, column=0, padx=10, pady=10)
+        ctk.CTkLabel(self.login_window, text="Username", font=("Helvetica", 14)).grid(row=1, column=0, padx=10, pady=10)
+        ctk.CTkLabel(self.login_window, text="Password", font=("Helvetica", 14)).grid(row=2, column=0, padx=10, pady=10)
 
-        self.username_entry = ctk.CTkEntry(self.login_window, font=("Times New Roman", 12))
-        self.password_entry = ctk.CTkEntry(self.login_window, show='*', font=("Times New Roman", 12))
+        self.username_entry = ctk.CTkEntry(self.login_window, font=("Helvetica", 14))
+        self.password_entry = ctk.CTkEntry(self.login_window, show='*', font=("Helvetica", 14))
 
         self.username_entry.grid(row=1, column=1, padx=10, pady=10)
         self.password_entry.grid(row=2, column=1, padx=10, pady=10)
 
-        ctk.CTkLabel(self.login_window, text="Language", font=("Times New Roman", 12)).grid(row=3, column=0, padx=10, pady=10)
+        ctk.CTkLabel(self.login_window, text="Language", font=("Helvetica", 14)).grid(row=3, column=0, padx=10, pady=10)
         self.language_var = ctk.StringVar()
-        self.language_combobox = ctk.CTkComboBox(self.login_window, variable=self.language_var, values=["AR", "FR", "DAR"], font=("Times New Roman", 12))
+        self.language_combobox = ctk.CTkComboBox(self.login_window, variable=self.language_var, values=["AR", "FR", "DAR"], font=("Helvetica", 14))
         self.language_combobox.grid(row=3, column=1, padx=10, pady=10)
         self.language_combobox.set("AR")
 
-        ctk.CTkButton(self.login_window, text="Login", command=self.login, font=("Times New Roman", 12)).grid(row=4, column=0, columnspan=2, pady=10)
-        ctk.CTkButton(self.login_window, text="Register", command=self.register, font=("Times New Roman", 12)).grid(row=5, column=0, columnspan=2, pady=10)
+        ctk.CTkButton(self.login_window, text="Login", command=self.login, font=("Helvetica", 12)).grid(row=4, column=0, columnspan=2, pady=10)
+        ctk.CTkButton(self.login_window, text="Register", command=self.register, font=("Helvetica", 12)).grid(row=5, column=0, columnspan=2, pady=10)
 
     def login(self):
         """Handle user login."""
@@ -663,108 +673,111 @@ class Application(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_columnconfigure(2, weight=1)
 
-        self.input_label = ctk.CTkLabel(self, text="Input Text:", font=("Times New Roman", 12))
+        self.input_label = ctk.CTkLabel(self, text="Input Text:", font=("Helvetica", 14))
         self.input_label.grid(row=0, column=0, pady=5, sticky='nsew')
 
         # Add Scrollbar for input text
-        self.input_scrollbar = Scrollbar(self)
-        self.input_text = ctk.CTkTextbox(self, wrap='word', width=600, height=200, font=("Times New Roman", 12), yscrollcommand=self.input_scrollbar.set)
+        self.input_scrollbar = Scrollbar(self, width=10)
+        self.input_text = ctk.CTkTextbox(self, wrap='word', width=400, height=200, font=("Helvetica", 14), yscrollcommand=self.input_scrollbar.set)
         self.input_text.grid(row=1, column=0, padx=5, pady=5, sticky='nsew')
         self.input_scrollbar.grid(row=1, column=1, sticky='nsew')
         self.input_scrollbar.config(command=self.input_text.yview)
 
-        self.lang_label = ctk.CTkLabel(self, text="Select Input Language:", font=("Times New Roman", 12))
+        self.lang_label = ctk.CTkLabel(self, text="Select Input Language:", font=("Helvetica", 14))
         self.lang_label.grid(row=2, column=0, pady=5, sticky='nsew')
-        self.input_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Times New Roman", 12))
+        self.input_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Helvetica", 14))
         self.input_lang.grid(row=3, column=0, pady=5, sticky='nsew')
         
-        self.output_lang_label = ctk.CTkLabel(self, text="Select Output Language:", font=("Times New Roman", 12))
+        self.output_lang_label = ctk.CTkLabel(self, text="Select Output Language:", font=("Helvetica", 14))
         self.output_lang_label.grid(row=4, column=0, pady=5, sticky='nsew')
-        self.output_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Times New Roman", 12))
+        self.output_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Helvetica", 14))
         self.output_lang.grid(row=5, column=0, pady=5, sticky='nsew')
         
-        self.quality_label = ctk.CTkLabel(self, text="Select Quality Mode:", font=("Times New Roman", 12))
+        self.quality_label = ctk.CTkLabel(self, text="Select Quality Mode:", font=("Helvetica", 14))
         self.quality_label.grid(row=6, column=0, pady=5, sticky='nsew')
-        self.quality_mode = ctk.CTkComboBox(self, values=["economy", "good", "premium"], font=("Times New Roman", 12))
+        self.quality_mode = ctk.CTkComboBox(self, values=["economy", "good", "premium"], font=("Helvetica", 14))
         self.quality_mode.grid(row=7, column=0, pady=5, sticky='nsew')
 
-        self.input_token_label = ctk.CTkLabel(self, text="Input Token Limit:", font=("Times New Roman", 12))
+        self.input_token_label = ctk.CTkLabel(self, text="Input Token Limit:", font=("Helvetica", 14))
         self.input_token_label.grid(row=8, column=0, pady=5, sticky='nsew')
-        self.input_token_limit = ctk.CTkEntry(self, font=("Times New Roman", 12))
+        self.input_token_limit = ctk.CTkEntry(self, font=("Helvetica", 14))
         self.input_token_limit.grid(row=9, column=0, pady=5, sticky='nsew')
         self.input_token_limit.insert(0, "800")
 
-        self.output_token_label = ctk.CTkLabel(self, text="Output Token Limit:", font=("Times New Roman", 12))
+        self.output_token_label = ctk.CTkLabel(self, text="Output Token Limit:", font=("Helvetica", 14))
         self.output_token_label.grid(row=10, column=0, pady=5, sticky='nsew')
-        self.output_token_limit = ctk.CTkEntry(self, font=("Times New Roman", 12))
+        self.output_token_limit = ctk.CTkEntry(self, font=("Helvetica", 14))
         self.output_token_limit.grid(row=11, column=0, pady=5, sticky='nsew')
         self.output_token_limit.insert(0, "500")
 
-        self.submit_button = ctk.CTkButton(self, text="Submit", command=self.process_input, font=("Times New Roman", 12))
+        self.submit_button = ctk.CTkButton(self, text="Submit", command=self.process_input, font=("Helvetica", 12))
         self.submit_button.grid(row=12, column=0, pady=5)
 
-        self.output_label = ctk.CTkLabel(self, text="Output Text:", font=("Times New Roman", 12))
+        self.output_label = ctk.CTkLabel(self, text="Output Text:", font=("Helvetica", 14))
         self.output_label.grid(row=0, column=2, pady=5, sticky='nsew')
 
         # Add Scrollbar for output text
-        self.output_scrollbar = Scrollbar(self)
-        self.output_text = ctk.CTkTextbox(self, wrap='word', width=800, height=300, font=("Times New Roman", 12), yscrollcommand=self.output_scrollbar.set)
+        self.output_scrollbar = Scrollbar(self, width=10)
+        self.output_text = ctk.CTkTextbox(self, wrap='word', width=400, height=200, font=("Helvetica", 14), yscrollcommand=self.output_scrollbar.set)
         self.output_text.grid(row=1, column=2, padx=5, pady=5, sticky='nsew')
         self.output_scrollbar.grid(row=1, column=3, sticky='nsew')
         self.output_scrollbar.config(command=self.output_text.yview)
 
-        self.f1_score_value = ctk.CTkLabel(self, text="F1 Score: N/A", font=("Times New Roman", 12))
+        self.f1_score_value = ctk.CTkLabel(self, text="F1 Score: N/A", font=("Helvetica", 14))
         self.f1_score_value.grid(row=2, column=2, pady=5, sticky='nsew')
-        self.rouge_l_score_value = ctk.CTkLabel(self, text="ROUGE-L: N/A", font=("Times New Roman", 12))
+        self.rouge_l_score_value = ctk.CTkLabel(self, text="ROUGE-L: N/A", font=("Helvetica", 14))
         self.rouge_l_score_value.grid(row=3, column=2, pady=5, sticky='nsew')
-        self.sacrebleu_score_value = ctk.CTkLabel(self, text="sacreBLEU: N/A", font=("Times New Roman", 12))
+        self.sacrebleu_score_value = ctk.CTkLabel(self, text="sacreBLEU: N/A", font=("Helvetica", 14))
         self.sacrebleu_score_value.grid(row=4, column=2, pady=5, sticky='nsew')
 
-        self.record_button = ctk.CTkButton(self, text="Record", command=self.start_recording, font=("Times New Roman", 12))
+        self.record_button = ctk.CTkButton(self, text="Record", command=self.start_recording, font=("Helvetica", 14))
         self.record_button.grid(row=5, column=1, pady=5)
 
-        self.stop_button = ctk.CTkButton(self, text="Stop Recording", command=self.stop_recording, font=("Times New Roman", 12))
+        self.stop_button = ctk.CTkButton(self, text="Stop Recording", command=self.stop_recording, font=("Helvetica", 14))
         self.stop_button.grid(row=6, column=1, pady=5)
         self.stop_button.configure(state="disabled")
 
-        self.speak_button = ctk.CTkButton(self, text="Read Aloud Output", command=self.read_aloud_output, font=("Times New Roman", 12))
+        self.speak_button = ctk.CTkButton(self, text="Read Aloud Output", command=self.read_aloud_output, font=("Helvetica", 14))
         self.speak_button.grid(row=7, column=1, pady=5)
 
-        self.play_button = ctk.CTkButton(self, text="▶ Play", command=play_audio, font=("Times New Roman", 12))
+        self.play_button = ctk.CTkButton(self, text="▶ Play", command=play_audio, font=("Helvetica", 14))
         self.play_button.grid(row=8, column=1, pady=5)
 
-        self.pause_button = ctk.CTkButton(self, text="⏸ Pause", command=pause_audio, font=("Times New Roman", 12))
+        self.pause_button = ctk.CTkButton(self, text="⏸ Pause", command=pause_audio, font=("Helvetica", 14))
         self.pause_button.grid(row=9, column=1, pady=5)
 
-        self.replay_button = ctk.CTkButton(self, text="⏪ Replay", command=replay_audio, font=("Times New Roman", 12))
+        self.replay_button = ctk.CTkButton(self, text="⏪ Replay", command=replay_audio, font=("Helvetica", 14))
         self.replay_button.grid(row=10, column=1, pady=5)
 
-        self.report_button = ctk.CTkButton(self, text="Generate Report", command=self.display_report, font=("Times New Roman", 12))
+        self.report_button = ctk.CTkButton(self, text="Generate Report", command=self.display_report, font=("Helvetica", 14))
         self.report_button.grid(row=11, column=1, pady=5)
 
-        self.user_info_label = ctk.CTkLabel(self, text=f"Logged in as: {self.username}", font=("Times New Roman", 12))
+        self.user_info_label = ctk.CTkLabel(self, text=f"Logged in as: {self.username}", font=("Helvetica", 14))
         self.user_info_label.grid(row=12, column=1, pady=5, sticky='w')
 
-        self.logout_button = ctk.CTkButton(self, text="Logout", command=self.logout, font=("Times New Roman", 12))
+        self.logout_button = ctk.CTkButton(self, text="Logout", command=self.logout, font=("Helvetica", 14))
         self.logout_button.grid(row=12, column=2, pady=5, sticky='e')
 
-        self.recording_label = ctk.CTkLabel(self, text="Recording... Please speak into the microphone", text_color="red", font=("Times New Roman", 12))
+        self.recording_label = ctk.CTkLabel(self, text="Recording... Please speak into the microphone", text_color="red", font=("Helvetica", 14))
         self.recording_label.grid(row=13, column=0, columnspan=3, pady=5)
         self.recording_label.grid_remove()
 
-        self.transcription_label = ctk.CTkLabel(self, text="", text_color="blue", font=("Times New Roman", 12))
+        self.transcription_label = ctk.CTkLabel(self, text="", text_color="blue", font=("Helvetica", 14))
         self.transcription_label.grid(row=14, column=0, columnspan=3, pady=5)
         self.transcription_label.grid_remove()
 
-        self.feedback_label = ctk.CTkLabel(self, text="Feedback (Optional):", font=("Times New Roman", 12))
+        self.feedback_label = ctk.CTkLabel(self, text="Feedback (Optional):", font=("Helvetica", 14))
         self.feedback_label.grid(row=15, column=0, pady=5, sticky='nsew')
-        self.feedback_text = ctk.CTkTextbox(self, wrap='word', width=40, height=10, font=("Times New Roman", 12))
+        self.feedback_scrollbar = Scrollbar(self, width=10)
+        self.feedback_text = ctk.CTkTextbox(self, wrap='word', width=10, height=10, font=("Helvetica", 14), yscrollcommand=self.feedback_scrollbar.set)
         self.feedback_text.grid(row=16, column=0, padx=5, pady=5, sticky='nsew')
+        self.feedback_scrollbar.grid(row=16, column=1, sticky='nsew')
+        self.feedback_scrollbar.config(command=self.feedback_text.yview)
 
-        self.submit_feedback_button = ctk.CTkButton(self, text="Submit Feedback", command=self.submit_feedback, font=("Times New Roman", 12))
+        self.submit_feedback_button = ctk.CTkButton(self, text="Submit Feedback", command=self.submit_feedback, font=("Helvetica", 12))
         self.submit_feedback_button.grid(row=17, column=0, pady=5)
 
-        self.submit_text_button = ctk.CTkButton(self, text="Submit Text", command=self.process_input, font=("Times New Roman", 12))
+        self.submit_text_button = ctk.CTkButton(self, text="Submit Text", command=self.process_input, font=("Helvetica", 12))
         self.submit_text_button.grid(row=17, column=1, pady=5)
 
     def logout(self):
@@ -782,46 +795,27 @@ class Application(ctk.CTk):
         quality_mode = self.quality_mode.get()
         input_token_limit = self.validate_token_limit(self.input_token_limit.get())
         output_token_limit = self.validate_token_limit(self.output_token_limit.get())
+        additional_comments = self.feedback_text.get("1.0", 'end').strip()
 
         if not user_input or not input_lang or not output_lang or not quality_mode:
             messagebox.showerror("Error", "All fields must be filled")
             return
-        
+
         if input_token_limit is None or output_token_limit is None:
             messagebox.showerror("Error", "Token limits must be valid integers")
             return
 
         # Create a unique cache key based on user details, LLM mode, and input
         cache_key = f"{self.username}:{quality_mode}:{input_lang}:{output_lang}:{user_input}"
-        if cache_key in self.cache:
-            response_text = self.cache[cache_key]
-            self.update_output_text(response_text)
+
+        # Check if the user input is in cache and additional comments are not provided
+        if cache_key in self.cache and not additional_comments:
+            response_text = self.cache[cache_key]['response']
+            feedback = self.cache[cache_key].get('feedback', None)
+            self.update_output_text(response_text, feedback)
         else:
-            # Set true_text here based on your application logic
-            self.true_text = """
-            L'Office National du Conseil Agricole (ONCA) est une organisation dédiée au service des agriculteurs, créée en vertu de la loi 58-12 promulguée par le Dahir N°1.12.67 du 4 Rabii I 1434 (16 Janvier 2013). L'ONCA a été établi pour répondre aux missions de conseil agricole et garantir une bonne intégration de l'office dans son environnement institutionnel.
-
-            **Structure Organisationnelle :**
-            L'ONCA est structuré en trois directions principales au niveau central :
-            1. **Direction d'Ingénierie du Conseil Agricole :** Responsable de la coordination et du suivi de l'élaboration des plans d'action régionaux annuels de conseil agricole, de la préparation des programmes et budgets annuels et pluriannuels de conseil agricole au niveau national, ainsi que de l'allocation des ressources aux différents acteurs du conseil agricole.
-            2. **Direction des Opérations**
-            3. **Direction des Ressources Humaines et Support**
-
-            **Missions et Activités :**
-            - Le renforcement des partenariats public-privé.
-            - L'organisation et le déploiement du métier de conseiller agricole privé au niveau national dans le cadre de la contractualisation (loi 62-12).
-            - Une refonte du réseau des entités locales de conseil agricole, favorisant la mobilité des conseillers publics et l'optimisation des moyens, a conduit à l'absorption de 122 Centres Techniques (CT) au sein de l'ONCA.
-
-            **Gouvernance :**
-            Le dispositif de conseil agricole au niveau national est piloté et gouverné par l'ONCA. Au niveau régional, la coordination et l'animation sont sous la responsabilité des Directions Régionales du Conseil Agricole (DRCA).
-
-            **Nouveaux Centres de Conseil Agricole (CCA) :**
-            Ces centres ont rapidement constitué des points d'attraction pour les agriculteurs, contribuant à la diffusion des bonnes pratiques agricoles à travers diverses méthodes de communication, y compris des vidéos en motion design et des podcasts agricoles.
-
-            **Productions et Communication :**
-            L'ONCA utilise des plateformes telles que ARDNA, les réseaux sociaux, et les chaînes TV pour diffuser des vidéos éducatives sur différentes filières agricoles. Ces vidéos sont partagées avec les conseillers agricoles pour être ensuite transmises aux agriculteurs. Les mascottes de l'ONCA sont mises en avant dans
-            """
-            Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit)).start()
+            # Generate response with consideration of additional comments if provided
+            Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit, additional_comments)).start()
 
     def validate_token_limit(self, token_limit):
         try:
@@ -890,7 +884,7 @@ class Application(ctk.CTk):
             except sr.RequestError:
                 self.update_transcription_label("Could not request results from Google Speech Recognition service")
 
-    def run_user_input_choice(self, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit):
+    def run_user_input_choice(self, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
         """Run the user input choice function in a separate thread."""
         collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
         
@@ -898,22 +892,21 @@ class Application(ctk.CTk):
             response_text = f"The collection '{collection_name}' does not exist. Please ensure the data is processed and the collection is created."
         else:
             if input_type == "voice":
-                response_text = generate_response(user_input, collection_name, quality_mode, input_token_limit, output_token_limit)
+                response_text = generate_response(user_input, collection_name, quality_mode, input_token_limit, output_token_limit, feedback)
                 if output_lang == "dar":
                     response_text = translate_to_darija(response_text)
                 elif input_lang != output_lang:
                     response_text = translate_text(response_text, output_lang)
             else:
-                response_text = user_input_choice(input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit)
+                response_text = user_input_choice(input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit, feedback)
             
             if output_lang == "ar":
                 response_text = format_rtl_text(response_text)
-        
-        self.cache[cache_key] = response_text  # Cache the response
+        self.cache[cache_key] = {'response': response_text, 'feedback': feedback}  # Cache the response and feedback
         save_cache(self.cache)  # Save the updated cache
         self.after(0, self.update_output_text, response_text)
 
-    def update_output_text(self, response_text):
+    def update_output_text(self, response_text, feedback=None):
         """Update the output text widget and compute scores."""
         self.output_text.delete("1.0", 'end')
         self.output_text.insert('end', response_text)
@@ -943,7 +936,6 @@ class Application(ctk.CTk):
             L'ONCA utilise des plateformes telles que ARDNA, les réseaux sociaux, et les chaînes TV pour diffuser des vidéos éducatives sur différentes filières agricoles. Ces vidéos sont partagées avec les conseillers agricoles pour être ensuite transmises aux agriculteurs. Les mascottes de l'ONCA sont mises en avant dans
             """
 
-
         # Compute scores
         f1 = compute_f1_score(true_text, response_text)
         rouge_l = compute_rouge_l(true_text, response_text)
@@ -954,20 +946,28 @@ class Application(ctk.CTk):
         self.rouge_l_score_value.configure(text=f"ROUGE-L: {rouge_l:.2f}")
         self.sacrebleu_score_value.configure(text=f"sacreBLEU: {sacrebleu_score:.2f}")
 
-        # Prompt for feedback if any score is below a threshold (e.g., 50)
-        if f1 < 50 or rouge_l < 50 or sacrebleu_score < 50:
-            messagebox.showinfo("Feedback Request", "The response quality seems low. Please provide feedback.")
-            self.feedback_label.grid()
-            self.feedback_text.grid()
-            self.submit_feedback_button.grid()
-        else:
+        print(f"F1 Score: {f1:.2f}, ROUGE-L: {rouge_l:.2f}, sacreBLEU: {sacrebleu_score:.2f}")  # Debugging statement
+
+        # Check if feedback is already provided
+        cache_key = f"{self.username}:{self.quality_mode.get()}:{self.input_lang.get()}:{self.output_lang.get()}:{self.input_text.get('1.0', 'end').strip()}"
+        if cache_key in self.cache and 'feedback' in self.cache[cache_key]:
             self.feedback_label.grid_remove()
             self.feedback_text.grid_remove()
             self.submit_feedback_button.grid_remove()
+        else:
+            # Prompt for feedback if any score is below a threshold (e.g., 50)
+            if f1 < 50 or rouge_l < 50 or sacrebleu_score < 50:
+                print("Prompting for feedback...")  # Debugging statement
+                self.prompt_for_feedback()
 
     def update_transcription_label(self, transcription):
         """Update the transcription label."""
         self.transcription_label.configure(text=f"Transcription: {transcription}")
+    
+    def on_feedback_window_close(self):
+        """Handle the feedback window close event."""
+        self.feedback_window.grab_release()
+        self.feedback_window.destroy()
 
     def read_aloud_output(self):
         """Read aloud the output text."""
@@ -982,8 +982,11 @@ class Application(ctk.CTk):
         report_window = ctk.CTkToplevel(self)
         report_window.title("Interaction Report")
         report_window.iconbitmap("icon.ico")
-        report_text = ctk.CTkTextbox(report_window, wrap='word', width=100, height=20, font=("Times New Roman", 12))
+        report_scrollbar = Scrollbar(report_window, width=10)
+        report_text = ctk.CTkTextbox(report_window, wrap='word', width=100, height=20, font=("Helvetica", 14), yscrollcommand=report_scrollbar.set)
         report_text.pack(padx=10, pady=10)
+        report_scrollbar.pack(side='right', fill='y')
+        report_scrollbar.config(command=report_text.yview)
         report_text.insert('end', report.to_string())
 
     def submit_feedback(self):
@@ -1007,7 +1010,14 @@ class Application(ctk.CTk):
         }
         with open("feedback_logs.json", "a") as log_file:
             log_file.write(json.dumps(log_data) + "\n")
-        
+
+        # Update cache with feedback
+        cache_key = f"{self.username}:{self.quality_mode.get()}:{self.input_lang.get()}:{self.output_lang.get()}:{self.input_text.get('1.0', 'end').strip()}"
+        if cache_key in self.cache:
+            self.cache[cache_key]['feedback'] = feedback_details
+
+        save_cache(self.cache)  # Save the updated cache
+
         # Log to MLflow
         with mlflow.start_run():
             mlflow.log_param("user", self.username)
@@ -1017,31 +1027,119 @@ class Application(ctk.CTk):
         messagebox.showinfo("Success", "Feedback submitted successfully")
         self.feedback_text.delete("1.0", 'end')
 
-    def show_feedback_form(self):
-        """Display a structured feedback form."""
-        feedback_window = ctk.CTkToplevel(self)
-        feedback_window.title("Submit Feedback")
-        feedback_window.geometry("400x400")
+        # Re-generate response with the feedback
+        user_input = self.input_text.get("1.0", 'end').strip()
+        input_lang = self.input_lang.get()
+        output_lang = self.output_lang.get()
+        quality_mode = self.quality_mode.get()
+        input_token_limit = self.validate_token_limit(self.input_token_limit.get())
+        output_token_limit = self.validate_token_limit(self.output_token_limit.get())
+        print("Re-generating response with feedback...")  # Debugging statement
+        Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit, feedback_details)).start()
 
-        ctk.CTkLabel(feedback_window, text="Rate the response on the following criteria:", font=("Times New Roman", 12)).grid(row=0, column=0, columnspan=2, pady=10)
+    def prompt_for_feedback(self):
+        """Prompt the user for feedback."""
+        response = messagebox.askyesno("Feedback Request", "The response quality seems low. Would you like to submit feedback?")
+        print("Prompt for feedback called.")  # Debugging statement
+        if response:
+            self.feedback_label.grid()
+            self.feedback_text.grid()
+            self.submit_feedback_button.grid()
+            print("Opening feedback window...")  # Debugging statement
+            self.open_feedback_window()  # Ensure this method is called
+        else:
+            self.feedback_label.grid_remove()
+            self.feedback_text.grid_remove()
+            self.submit_feedback_button.grid_remove()
 
-        ctk.CTkLabel(feedback_window, text="Relevance:", font=("Times New Roman", 12)).grid(row=1, column=0, padx=10, pady=10, sticky='e')
+
+    def open_feedback_window(self):
+        """Open a new window for feedback submission."""
+        print("Feedback window method called.")  # Debugging statement
+        self.feedback_window = ctk.CTkToplevel(self)
+        self.feedback_window.title("Feedback")
+        self.feedback_window.geometry("400x400")
+        self.feedback_window.iconbitmap("icon.ico")
+
+        ctk.CTkLabel(self.feedback_window, text="Feedback Details:", font=("Helvetica", 14)).pack(pady=10)
+
+        ctk.CTkLabel(self.feedback_window, text="Relevance:", font=("Helvetica", 14)).pack(pady=5)
         self.relevance_var = ctk.IntVar()
-        ctk.CTkEntry(feedback_window, textvariable=self.relevance_var, font=("Times New Roman", 12)).grid(row=1, column=1, padx=10, pady=10)
+        self.relevance_scale = ctk.CTkScale(self.feedback_window, from_=1, to=5, variable=self.relevance_var)
+        self.relevance_scale.pack(pady=5)
 
-        ctk.CTkLabel(feedback_window, text="Accuracy:", font=("Times New Roman", 12)).grid(row=2, column=0, padx=10, pady=10, sticky='e')
+        ctk.CTkLabel(self.feedback_window, text="Accuracy:", font=("Helvetica", 14)).pack(pady=5)
         self.accuracy_var = ctk.IntVar()
-        ctk.CTkEntry(feedback_window, textvariable=self.accuracy_var, font=("Times New Roman", 12)).grid(row=2, column=1, padx=10, pady=10)
+        self.accuracy_scale = ctk.CTkScale(self.feedback_window, from_=1, to=5, variable=self.accuracy_var)
+        self.accuracy_scale.pack(pady=5)
 
-        ctk.CTkLabel(feedback_window, text="Fluency:", font=("Times New Roman", 12)).grid(row=3, column=0, padx=10, pady=10, sticky='e')
+        ctk.CTkLabel(self.feedback_window, text="Fluency:", font=("Helvetica", 14)).pack(pady=5)
         self.fluency_var = ctk.IntVar()
-        ctk.CTkEntry(feedback_window, textvariable=self.fluency_var, font=("Times New Roman", 12)).grid(row=3, column=1, padx=10, pady=10)
+        self.fluency_scale = ctk.CTkScale(self.feedback_window, from_=1, to=5, variable=self.fluency_var)
+        self.fluency_scale.pack(pady=5)
 
-        ctk.CTkLabel(feedback_window, text="Additional Comments:", font=("Times New Roman", 12)).grid(row=4, column=0, columnspan=2, pady=10)
-        self.feedback_text = ctk.CTkTextbox(feedback_window, wrap='word', width=40, height=10, font=("Times New Roman", 12))
-        self.feedback_text.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+        ctk.CTkLabel(self.feedback_window, text="Additional Comments:", font=("Helvetica", 14)).pack(pady=5)
+        self.additional_comments_text = ctk.CTkTextbox(self.feedback_window, width=300, height=100, font=("Helvetica", 14))
+        self.additional_comments_text.pack(pady=5)
 
-        ctk.CTkButton(feedback_window, text="Submit Feedback", command=self.submit_feedback, font=("Times New Roman", 12)).grid(row=6, column=0, columnspan=2, pady=10)
+        ctk.CTkButton(self.feedback_window, text="Submit Feedback", command=self.submit_feedback_from_window, font=("Helvetica", 14)).pack(pady=10)
+
+        self.feedback_window.protocol("WM_DELETE_WINDOW", self.on_feedback_window_close)
+        self.feedback_window.transient(self)
+        self.feedback_window.grab_set()
+        self.wait_window(self.feedback_window)
+
+
+    def submit_feedback_from_window(self):
+        """Submit feedback from the new feedback window."""
+        relevance = self.relevance_var.get()
+        accuracy = self.accuracy_var.get()
+        fluency = self.fluency_var.get()
+        additional_comments = self.additional_comments_text.get("1.0", 'end').strip()
+
+        if not additional_comments:
+            messagebox.showerror("Error", "Feedback cannot be empty")
+            return
+
+        feedback_details = {
+            "relevance": relevance,
+            "accuracy": accuracy,
+            "fluency": fluency,
+            "additional_comments": additional_comments
+        }
+
+        log_data = {
+            "timestamp": time.time(),
+            "user": self.username,
+            "feedback": feedback_details
+        }
+        with open("feedback_logs.json", "a") as log_file:
+            log_file.write(json.dumps(log_data) + "\n")
+
+        # Update cache with feedback
+        cache_key = f"{self.username}:{self.quality_mode.get()}:{self.input_lang.get()}:{self.output_lang.get()}:{self.input_text.get('1.0', 'end').strip()}"
+        if cache_key in self.cache:
+            self.cache[cache_key]['feedback'] = feedback_details
+
+        save_cache(self.cache)  # Save the updated cache
+
+        # Log to MLflow
+        with mlflow.start_run():
+            mlflow.log_param("user", self.username)
+            mlflow.log_param("feedback", feedback_details)
+            mlflow.log_metric("timestamp", log_data["timestamp"])
+
+        messagebox.showinfo("Success", "Feedback submitted successfully")
+        self.feedback_window.destroy()
+
+        # Re-generate response with the feedback
+        user_input = self.input_text.get("1.0", 'end').strip()
+        input_lang = self.input_lang.get()
+        output_lang = self.output_lang.get()
+        quality_mode = self.quality_mode.get()
+        input_token_limit = self.validate_token_limit(self.input_token_limit.get())
+        output_token_limit = self.validate_token_limit(self.output_token_limit.get())
+        Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit, feedback_details)).start()
 
 if __name__ == "__main__":
     def run_flask_app():

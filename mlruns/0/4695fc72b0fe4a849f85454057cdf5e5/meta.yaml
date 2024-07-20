@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/4695fc72b0fe4a849f85454057cdf5e5/artifacts
+end_time: 1721426622778
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 4695fc72b0fe4a849f85454057cdf5e5
+run_name: melodic-bird-176
+run_uuid: 4695fc72b0fe4a849f85454057cdf5e5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721426622654
+status: 3
+tags: []
+user_id: LENOVO

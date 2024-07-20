@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/cfc54ccd4c3f4740be3e08431342008f/artifacts
+end_time: 1721418458133
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: cfc54ccd4c3f4740be3e08431342008f
+run_name: magnificent-hog-639
+run_uuid: cfc54ccd4c3f4740be3e08431342008f
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721418458007
+status: 3
+tags: []
+user_id: LENOVO
