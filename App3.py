@@ -14,15 +14,16 @@ import pygame
 import speech_recognition as sr
 from gtts import gTTS
 from langdetect import detect
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 import openai
 import mlflow
 import customtkinter as ctk
-from tkinter import Scrollbar, messagebox, Canvas, Frame, simpledialog
-import requests
+from tkinter import Scrollbar, messagebox, Canvas, Frame
+from tkinter import simpledialog  # Added this import
+import requests  # Added this import
 from threading import Thread, Lock
 from functools import lru_cache
 from PIL import Image, ImageTk
@@ -100,6 +101,7 @@ def load_user(user_id):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+from flask import session
 @flask_app.route('/user', methods=['GET'])
 @login_required
 def get_user_info():
@@ -111,6 +113,7 @@ def get_user_info():
         'id': current_user.id
     }
     return jsonify(user_info), 200
+
 
 true_text = ""
 
@@ -124,6 +127,7 @@ def update_true_text():
 
     true_text = new_true_text
     return jsonify({'message': 'True text updated successfully'}), 200
+
 
 @flask_app.route('/user', methods=['PUT'])
 @login_required
@@ -540,6 +544,7 @@ class Application(ctk.CTk):
 
         self.cache = load_cache()
 
+    # Add this method to update the true_text variable
     def update_true_text(self):
         new_true_text = simpledialog.askstring("Update True Text", "Enter new true text:")
         if new_true_text:
@@ -1043,6 +1048,7 @@ class Application(ctk.CTk):
             self.feedback_text.grid_remove()
             self.submit_feedback_button.grid_remove()
 
+
     def submit_feedback_from_window(self):
         relevance = self.relevance_var.get()
         accuracy = self.accuracy_var.get()
@@ -1124,6 +1130,8 @@ class Application(ctk.CTk):
                 self.logout()
             except requests.exceptions.RequestException as e:
                 messagebox.showerror("Error", f"Failed to delete user: {e}")
+
+
 
 if __name__ == "__main__":
     def run_flask_app():

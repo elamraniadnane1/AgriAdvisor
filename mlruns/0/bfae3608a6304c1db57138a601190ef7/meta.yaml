@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/bfae3608a6304c1db57138a601190ef7/artifacts
+end_time: 1721847071934
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: bfae3608a6304c1db57138a601190ef7
+run_name: able-fowl-162
+run_uuid: bfae3608a6304c1db57138a601190ef7
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721847071787
+status: 3
+tags: []
+user_id: LENOVO

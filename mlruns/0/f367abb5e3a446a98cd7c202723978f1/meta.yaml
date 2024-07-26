@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/f367abb5e3a446a98cd7c202723978f1/artifacts
+end_time: 1721850229416
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: f367abb5e3a446a98cd7c202723978f1
+run_name: bemused-horse-273
+run_uuid: f367abb5e3a446a98cd7c202723978f1
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721850229325
+status: 3
+tags: []
+user_id: LENOVO

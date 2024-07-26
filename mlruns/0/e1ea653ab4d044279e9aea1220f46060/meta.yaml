@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/e1ea653ab4d044279e9aea1220f46060/artifacts
+end_time: 1721847119900
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: e1ea653ab4d044279e9aea1220f46060
+run_name: carefree-gull-186
+run_uuid: e1ea653ab4d044279e9aea1220f46060
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721847119832
+status: 3
+tags: []
+user_id: LENOVO

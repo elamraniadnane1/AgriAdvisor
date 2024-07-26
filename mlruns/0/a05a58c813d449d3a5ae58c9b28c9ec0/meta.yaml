@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/a05a58c813d449d3a5ae58c9b28c9ec0/artifacts
+end_time: 1721847207543
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: a05a58c813d449d3a5ae58c9b28c9ec0
+run_name: capricious-duck-306
+run_uuid: a05a58c813d449d3a5ae58c9b28c9ec0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1721847207473
+status: 3
+tags: []
+user_id: LENOVO
