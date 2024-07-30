@@ -4,8 +4,13 @@ import hashlib
 import re
 import time
 import json
+import threading
 import tempfile
 import wave
+import os
+import time
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 import numpy as np
 import pandas as pd
 import fitz  # PyMuPDF
@@ -20,9 +25,10 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 import openai
 import mlflow
-import mlflow.pyfunc
 import customtkinter as ctk
-from tkinter import scrolledtext, messagebox, Scrollbar, simpledialog
+from tkinter import Scrollbar, messagebox, Canvas, Frame, Scale, HORIZONTAL
+from tkinter import simpledialog
+import requests
 from threading import Thread, Lock
 from functools import lru_cache
 from PIL import Image, ImageTk
@@ -30,75 +36,441 @@ from sklearn.metrics import f1_score
 from rouge_score import rouge_scorer
 import sacrebleu
 from prometheus_flask_exporter import PrometheusMetrics
+import logging
+from config import Config
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tkinter import Scale, HORIZONTAL  # Add this import for the Scale widget
+import webbrowser
+import psutil
 
 # Directory and output file paths
 PDF_DIRECTORY = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset"
 OUTPUT_CSV_AR = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset\agriculture_data_ar_.csv"
 OUTPUT_CSV_FR = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset\agriculture_data_fr_.csv"
 
-# OpenAI API key
-openai.api_key = 'sk-proj-IoxzbELHRwIIhrlZVwrtT3BlbkFJvyxGl7jRv3fEzURZJt6g'
+class NewFileHandler(FileSystemEventHandler):
+    def __init__(self, pdf_directory, output_csv_ar, output_csv_fr):
+        self.pdf_directory = pdf_directory
+        self.output_csv_ar = output_csv_ar
+        self.output_csv_fr = output_csv_fr
+
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith(".pdf"):
+            logger.info(f"New PDF detected: {event.src_path}")
+            self.process_new_pdf(event.src_path)
+
+    def extract_text_from_pdf(self, pdf_path):
+        text = ""
+        logger.info(f"Starting text extraction from PDF: {pdf_path}")
+        try:
+            doc = fitz.open(pdf_path)
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                text += page.get_text("text")
+            logger.info(f"Text extraction completed for PDF: {pdf_path}")
+        except Exception as e:
+            logger.error(f"Failed to extract text from PDF {pdf_path}: {e}")
+        return text.strip()
+
+    def get_embedding(self, content):
+        for _ in range(3):
+            try:
+                logger.info(f"Attempting to retrieve embedding (Attempt {attempt + 1}/3) for content: {content[:30]}")
+                response = openai.Embedding.create(
+                    model="text-embedding-ada-002",
+                    input=content
+                )
+                embedding = response['data'][0]['embedding']
+                logger.info(f"Successfully retrieved embedding for content: {content[:30]}")
+                return embedding
+            except Exception as e:
+                logger.error(f"Error getting embedding: {e}")
+                time.sleep(2)
+        return None
+    def chunk_text(self, text, max_tokens=4000):
+        words = text.split()
+        chunks = []
+        current_chunk = []
+        current_length = 0
+
+        for word in words:
+            word_length = len(word)
+            if current_length + word_length > max_tokens:
+                chunks.append(' '.join(current_chunk))
+                current_chunk = [word]
+                current_length = word_length
+            else:
+                current_chunk.append(word)
+                current_length += word_length
+
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+
+        return chunks
+
+    def translate_text_to_french(self, text):
+        max_chunk_size = 4000  # Adjust based on token limits
+        translated_chunks = []
+        chunks = self.chunk_text(text, max_chunk_size)
+        total_chunks = len(chunks)
+        logger.info(f"Starting translation of text to French, total chunks: {total_chunks}")
+        try:
+            for i, chunk in enumerate(chunks):
+                logger.info(f"Translating chunk {i + 1} of {total_chunks}")
+                response = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "Translate the following text to French."},
+                        {"role": "user", "content": chunk}
+                    ]
+                )
+                translated_chunk = response['choices'][0]['message']['content']
+                translated_chunks.append(translated_chunk)
+
+                # Vectorize the translated chunk and store it in the collection
+                embedding = self.get_embedding(translated_chunk)
+                if embedding:
+                    point_id = str(uuid.uuid4())
+                    qdrant_client.upsert(
+                        collection_name="agriculture_fr",
+                        points=[
+                            models.PointStruct(
+                                id=point_id,
+                                vector=embedding,
+                                payload={
+                                    "filename": "translated_chunk",
+                                    "content": translated_chunk,
+                                    "language": "fr"
+                                }
+                            )
+                        ]
+                    )
+                    logger.info(f"Inserted translated chunk {i + 1} of {total_chunks} into the collection")
+            return " ".join(translated_chunks)
+        except Exception as e:
+            logger.error(f"Translation failed: {e}")
+            return text  # Return the original text if translation fails
+
+    def process_new_pdf(self, pdf_path):
+        logger.info(f"Processing new PDF: {pdf_path}")
+        text = self.extract_text_from_pdf(pdf_path)
+        try:
+            language = detect(text)
+            logger.info(f"Detected language for PDF {pdf_path}: {language}")
+        except Exception as e:
+            logger.error(f"Language detection failed for PDF {pdf_path}: {e}")
+            language = "unknown"
+        
+        data = {"filename": os.path.basename(pdf_path), "content": text}
+        
+        if language == "ar":
+            self.append_to_csv(data, self.output_csv_ar)
+        elif language == "fr":
+            self.append_to_csv(data, self.output_csv_fr)
+        elif language == "en":
+            logger.info(f"Translating English PDF to French: {pdf_path}")
+            translated_text = self.translate_text_to_french(text)
+            data["content"] = translated_text
+            self.append_to_csv(data, self.output_csv_fr)
+        else:
+            logger.info(f"Detected language '{language}' is not supported for PDF {pdf_path}")
+
+
+    def append_to_csv(self, data, csv_path):
+        try:
+            if not os.path.exists(csv_path):
+                df = pd.DataFrame([data])
+            else:
+                df = pd.read_csv(csv_path)
+                df = pd.concat([df, pd.DataFrame([data])], ignore_index=True)
+            df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+            logger.info(f"Appended data to {csv_path}")
+        except Exception as e:
+            logger.error(f"Failed to append data to CSV {csv_path}: {e}")
+
+def monitor_directory(pdf_directory, output_csv_ar, output_csv_fr):
+    event_handler = NewFileHandler(pdf_directory, output_csv_ar, output_csv_fr)
+    observer = Observer()
+    observer.schedule(event_handler, path=pdf_directory, recursive=False)
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+
+
+
+def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
+    collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
+
+    if not collection_exists(collection_name):
+        response_text = f"The collection '{collection_name}' does not exist. Please ensure the data is processed and the collection is created."
+    else:
+        if input_type == "voice":
+            response_text = generate_response(user_input, collection_name, quality_mode, input_token_limit, output_token_limit, feedback)
+            if output_lang == "dar":
+                response_text = translate_to_darija(response_text)
+            elif input_lang != output_lang:
+                response_text = translate_text(response_text, output_lang)
+        else:
+            response_text = user_input_choice(user_info, input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit, feedback)
+
+        if output_lang == "ar":
+            response_text = format_rtl_text(response_text)
+    app.cache[cache_key] = {'response': response_text, 'feedback': feedback}
+    save_cache(app.cache)
+    app.after(0, app.update_output_text, response_text)
+
+
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Load configuration
+config = Config()
+
+# Initialize OpenAI API
+openai.api_key = os.getenv('OPENAI_API_KEY', config.openai_api_key)
 
 # Initialize Qdrant client
-qdrant_client = QdrantClient("localhost", port=6333)
+qdrant_client = QdrantClient(config.qdrant_host, port=config.qdrant_port)
 
 # Flask app setup
 flask_app = Flask(__name__)
-flask_app.secret_key = 'supersecretkey'
+flask_app.secret_key = config.flask_secret_key
 login_manager = LoginManager()
 login_manager.init_app(flask_app)
 metrics = PrometheusMetrics(flask_app)
+login_manager.login_view = 'login'
 
 # In-memory user store
 users = {}
-USERS_FILE = 'users.json'
+USERS_FILE = config.users_file
 
 def compute_f1_score(true_text, predicted_text):
-    """Compute F1 score for classification or prediction tasks."""
     true_tokens = true_text.split()
     pred_tokens = predicted_text.split()
-    
     max_len = max(len(true_tokens), len(pred_tokens))
     true_labels = [1] * len(true_tokens) + [0] * (max_len - len(true_tokens))
     pred_labels = [1 if token in true_tokens else 0 for token in pred_tokens] + [0] * (max_len - len(pred_tokens))
-
     return f1_score(true_labels, pred_labels, average='micro')
 
 def compute_rouge_l(true_text, predicted_text):
-    """Compute ROUGE-L score for summarization tasks."""
     scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
     scores = scorer.score(true_text, predicted_text)
     return scores['rougeL'].fmeasure
 
 def compute_sacrebleu(true_text, predicted_text):
-    """Compute sacreBLEU score for translation tasks."""
     bleu = sacrebleu.corpus_bleu([predicted_text], [[true_text]])
-    return bleu.score
+    return bleu
+
+def show_help(self):
+    def open_docs():
+        webbrowser.open("index.html")  # Adjust the path if necessary
+
+    help_window = ctk.CTkToplevel(self)
+    help_window.title("Help")
+    help_window.geometry("800x600")
+    help_window.iconbitmap("icon.ico")
+
+    help_text = """
+    Welcome to the AI AgriAdvisor application!
+
+    Here are some features you can use:
+    - **Login/Register**: Use the login screen to enter your credentials. If you don't have an account, you can register for one.
+    - **Input Text**: Enter the text you want to process in the "Input Text" field.
+    - **Select Input/Output Language**: Choose the input and output languages from the dropdown menus.
+    - **Quality Mode**: Select the desired quality mode for the response (economy, good, premium).
+    - **Token Limits**: Set the input and output token limits.
+    - **Submit**: Click "Submit" to process the input text and get a response.
+    - **Record Audio**: Click "Record" to start recording your voice, and "Stop Recording" to end it. The application will transcribe your speech.
+    - **Read Aloud Output**: Click "Read Aloud Output" to listen to the response.
+    - **Volume Control**: Adjust the volume using the slider.
+    - **Seek Bar**: Use the seek bar to navigate through the audio.
+    - **Generate Report**: Click "Generate Report" to view the interaction report.
+    - **Feedback**: Provide feedback on the response by filling out the feedback form.
+
+    For more detailed instructions, visit our documentation.
+    """
+
+    help_label = ctk.CTkLabel(help_window, text=help_text, wraplength=700, font=("Helvetica", 14))
+    help_label.pack(padx=20, pady=20)
+
+    docs_button = ctk.CTkButton(help_window, text="Open Documentation", command=open_docs, font=("Helvetica", 14))
+    docs_button.pack(pady=10)
+
+def show_dashboard(self):
+    webbrowser.open('http://localhost:5005/dashboard')
+
 
 class User(UserMixin):
-    def __init__(self, id, username, password):
+    def __init__(self, id, username, password,authenticated=False):
         self.id = id
         self.username = username
         self.password = password
+        self.authenticated = authenticated
+
+    @property
+    def is_authenticated(self):
+        return self.authenticated
+
+    def authenticate(self):
+        self.authenticated = True
+
+    def deauthenticate(self):
+        self.authenticated = False
 
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, 'r', encoding='utf-8') as file:
-            user_data = json.load(file)
-            for user_id, data in user_data.items():
-                users[user_id] = User(user_id, data['username'], data['password'])
+            content = file.read().strip()
+            if content:
+                try:
+                    user_data = json.loads(content)
+                    for user_id, data in user_data.items():
+                        users[user_id] = User(user_id, data['username'], data['password'])
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error decoding JSON file {USERS_FILE}: {e}")
+            else:
+                logger.warning(f"{USERS_FILE} is empty.")
+    else:
+        logger.warning(f"{USERS_FILE} does not exist.")
 load_users()
-
 def save_users():
     with open(USERS_FILE, 'w', encoding='utf-8') as file:
         json.dump({user_id: {'username': user.username, 'password': user.password} for user_id, user in users.items()}, file, ensure_ascii=False, indent=4)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return users.get(user_id)
+    user = users.get(user_id)
+    if user:
+        logger.info(f"User {user.username} loaded successfully")
+        session['user_id'] = user.id  # Ensure user_id is in the session
+    else:
+        logger.error(f"User ID {user_id} not found in users")
+    return user
+
+
+
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+@flask_app.route('/feedback', methods=['POST'])
+@login_required
+def submit_feedback():
+    feedback = request.json.get('feedback')
+    # Implement feedback handling logic here
+    return jsonify({'message': 'Feedback submitted successfully'}), 200
+
+@flask_app.route('/user_activity', methods=['GET'])
+@login_required
+def get_user_activity():
+    user_id = current_user.id
+    # Implement logic to fetch and return user activity
+    return jsonify({'activity': 'User activity data'}), 200
+
+@flask_app.route('/update_password', methods=['PUT'])
+@login_required
+def update_password():
+    new_password = request.json.get('new_password')
+    # Implement password update logic here
+    return jsonify({'message': 'Password updated successfully'}), 200
+
+@flask_app.route('/admin/users', methods=['GET'])
+@login_required
+def get_all_users():
+    # Implement logic to fetch and return all users for admin
+    return jsonify({'users': 'List of all users'}), 200
+
+@flask_app.route('/admin/user/<user_id>', methods=['DELETE'])
+@login_required
+def delete_user_by_admin(user_id):
+    # Implement logic to delete a specific user by admin
+    return jsonify({'message': f'User {user_id} deleted successfully'}), 200
+
+
+from flask import render_template
+
+@flask_app.route('/dashboard', methods=['GET'])
+@login_required
+def dashboard():
+    interactions = generate_report()
+
+    if interactions.empty:
+        return "No interactions available to generate the report.", 400
+
+    if 'question' not in interactions.columns or 'user' not in interactions.columns or 'timestamp' not in interactions.columns:
+        logger.error("Missing necessary columns in interactions data.")
+        return "Insufficient data to generate the report.", 400
+
+    common_queries = interactions['question'].value_counts().head(10).to_dict()
+    user_stats = interactions['user'].value_counts().to_dict()
+    performance_metrics = {
+        'average_response_time': interactions['timestamp'].diff().mean(),
+        'total_interactions': len(interactions),
+        'users_count': interactions['user'].nunique(),
+    }
+    return render_template('dashboard.html', common_queries=common_queries, user_stats=user_stats, performance_metrics=performance_metrics)
+
+
+from flask import session
+@flask_app.route('/user', methods=['GET'])
+@login_required
+def get_user_info():
+    logger.info(f"Session data: {session}")
+    logger.info(f"Current user: {current_user}")
+    if 'user_id' not in session:
+        return jsonify({'error': 'User not authenticated'}), 401
+
+    user_info = {
+        'username': current_user.username,
+        'id': current_user.id,
+        'authenticated' : True
+    }
+    return jsonify(user_info), 200
+
+
+true_text = ""
+
+@flask_app.route('/update_true_text', methods=['POST'])
+@login_required
+def update_true_text():
+    global true_text
+    new_true_text = request.json.get('true_text')
+    if not new_true_text:
+        return jsonify({'error': 'True text is required'}), 400
+
+    true_text = new_true_text
+    return jsonify({'message': 'True text updated successfully'}), 200
+
+
+@flask_app.route('/user', methods=['PUT'])
+@login_required
+def update_user_details():
+    new_username = request.json.get('username')
+    new_password = request.json.get('password')
+    if new_username:
+        current_user.username = new_username
+    if new_password:
+        current_user.password = hash_password(new_password)
+    save_users()
+    return jsonify({'message': 'User details updated successfully'}), 200
+
+@flask_app.route('/user', methods=['DELETE'])
+@login_required
+def delete_user():
+    user_id = current_user.id
+    del users[user_id]
+    save_users()
+    logout_user()
+    return jsonify({'message': 'User deleted successfully'}), 200
 
 @flask_app.route('/register', methods=['POST'])
 def register():
@@ -109,19 +481,37 @@ def register():
     save_users()
     return jsonify({'message': 'User registered successfully'}), 201
 
-@flask_app.route('/login', methods=['POST'])
+@flask_app.route('/login', methods=['GET', 'POST'])
 def login():
-    username = request.json['username']
-    password = hash_password(request.json['password'])
-    for user in users.values():
-        if user.username == username and user.password == password:
-            login_user(user)
-            return jsonify({'message': 'Login successful'}), 200
-    return jsonify({'message': 'Invalid credentials'}), 401
+    if request.method == 'POST':
+        username = request.json['username']
+        password = hash_password(request.json['password'])
+        logger.info(f"Attempting login for user: {username}")
+        for user in users.values():
+            if user.username == username and user.password == password:
+                user.authenticate()  # Mark the user as authenticated
+                login_user(user)
+                next_page = request.args.get('next')
+                logger.info(f"User {username} logged in successfully")
+                user_info = {
+                    'id': user.id,
+                    'username': user.username,
+                    'authenticated': user.is_authenticated
+                }
+                if next_page:
+                    return jsonify({'message': 'Login successful', 'redirect': next_page, 'user_info': user_info}), 200
+                else:
+                    return jsonify({'message': 'Login successful', 'user_info': user_info}), 200
+        logger.error("Invalid credentials")
+        return jsonify({'message': 'Invalid credentials'}), 401
+    return render_template('login.html')  # Ensure you have a login.html template
+
+
 
 @flask_app.route('/logout', methods=['POST'])
 @login_required
 def logout():
+    current_user.deauthenticate() 
     logout_user()
     return jsonify({'message': 'Logged out successfully'}), 200
 
@@ -131,21 +521,29 @@ def logout():
 def query():
     question = request.json['question']
     collection_name = request.json['collection']
-    response_text = generate_response(question, collection_name)
-    log_interaction(current_user.username, question, response_text, collection_name)
-    return jsonify({'response': response_text}), 200
+    logger.info(f"Received query: {question} for collection: {collection_name}")
+    quality_mode = request.json.get('quality_mode', 'good')
+    try:
+        response_text = generate_response(question, collection_name)
+        #log_interaction(current_user.username, question, response_text, collection_name)
+        logger.info(f"Generated response: {response_text}")
+        return jsonify({'response': response_text}), 200
+    except Exception as e:
+        logger.error(f"Failed to process query: {e}")
+        return jsonify({'error': 'Failed to process query'}), 500
 
 def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF file with enhanced processing."""
     text = ""
-    doc = fitz.open(pdf_path)
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        text += page.get_text("text")
+    try:
+        doc = fitz.open(pdf_path)
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            text += page.get_text("text")
+    except Exception as e:
+        logger.error(f"Failed to extract text from PDF {pdf_path}: {e}")
     return text.strip()
 
 def create_csv(data_list, output_csv):
-    """Create a CSV file from the extracted data."""
     records = [{"filename": data["filename"], "content": data["content"]} for data in data_list]
     df = pd.DataFrame(records)
     df.to_csv(output_csv, index=False, encoding='utf-8-sig')
@@ -156,21 +554,26 @@ def load_cache():
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, 'r', encoding='utf-8') as file:
             content = file.read().strip()
-            if content:  # Check if file content is not empty
-                return json.loads(content)
+            if content:
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error decoding JSON file {CACHE_FILE}: {e}")
+            else:
+                logger.warning(f"{CACHE_FILE} is empty.")
+    else:
+        logger.warning(f"{CACHE_FILE} does not exist.")
     return {}
 
 def truncate_text(text, max_tokens):
     words = text.split()
-    truncated_text = ' '.join(words[:max_tokens])
-    return truncated_text
+    return ' '.join(words[:max_tokens])
 
 def save_cache(cache):
     with open(CACHE_FILE, 'w', encoding='utf-8') as file:
         json.dump(cache, file, ensure_ascii=False, indent=4)
 
 def process_pdfs(pdf_directory):
-    """Process all PDFs in the directory and extract data."""
     data_list_ar = []
     data_list_fr = []
 
@@ -191,13 +594,12 @@ def process_pdfs(pdf_directory):
                 data_list_fr.append(data)
     
     if data_list_ar:
-        create_csv(data_list_ar, OUTPUT_CSV_AR)
+        create_csv(data_list_ar, config.output_csv_ar)
     
     if data_list_fr:
-        create_csv(data_list_fr, OUTPUT_CSV_FR)
+        create_csv(data_list_fr, config.output_csv_fr)
 
 def chunk_text(text, max_tokens=800):
-    """Chunk text into smaller, semantically meaningful pieces."""
     words = text.split()
     chunks = []
     current_chunk = []
@@ -219,53 +621,64 @@ def chunk_text(text, max_tokens=800):
     return chunks
 
 def get_embedding(content):
-    """Get embedding from OpenAI API with retries for robustness."""
-    for _ in range(3):  # Retry mechanism
+    for _ in range(3):
         try:
             response = openai.Embedding.create(
                 model="text-embedding-ada-002",
                 input=content
             )
             embedding = response['data'][0]['embedding']
-            print(f"Successfully retrieved embedding for content: {content[:30]}")
+            logger.info(f"Successfully retrieved embedding for content: {content[:30]}")
             return embedding
         except Exception as e:
-            print(f"Error getting embedding: {e}")
-            time.sleep(2)  # Backoff before retrying
+            logger.error(f"Error getting embedding: {e}")
+            time.sleep(2)
     return None
 
 def collection_exists(collection_name):
-    """Check if a collection exists in Qdrant."""
     collections = qdrant_client.get_collections().collections
     return any(col.name == collection_name for col in collections)
 
 def check_csv_content():
-    if os.path.exists(OUTPUT_CSV_AR):
-        df_ar = pd.read_csv(OUTPUT_CSV_AR)
-        print(f"Arabic CSV contains {len(df_ar)} records.")
-    else:
-        print("Arabic CSV does not exist.")
+    if os.path.exists(config.output_csv_ar):
+        chunk_size = 1000  # Define your chunk size here
+        chunk_list = []  # Append each chunk df here
 
-    if os.path.exists(OUTPUT_CSV_FR):
-        df_fr = pd.read_csv(OUTPUT_CSV_FR)
-        print(f"French CSV contains {len(df_fr)} records.")
+        for chunk in pd.read_csv(config.output_csv_ar, chunksize=chunk_size):
+            chunk_list.append(chunk)
+
+        df_ar = pd.concat(chunk_list, axis=0)
+        logger.info(f"Arabic CSV contains {len(df_ar)} records.")
     else:
-        print("French CSV does not exist.")
+        logger.info("Arabic CSV does not exist.")
+
+    if os.path.exists(config.output_csv_fr):
+        chunk_size = 1000  # Define your chunk size here
+        chunk_list = []  # Append each chunk df here
+
+        for chunk in pd.read_csv(config.output_csv_fr, chunksize=chunk_size):
+            chunk_list.append(chunk)
+
+        df_fr = pd.concat(chunk_list, axis=0)
+        logger.info(f"French CSV contains {len(df_fr)} records.")
+    else:
+        logger.info("French CSV does not exist.")
 
 check_csv_content()
 
 def vectorize_and_store(csv_path, collection_name):
-    if collection_name in [col.name for col in qdrant_client.get_collections().collections]:
-        print(f"Collection '{collection_name}' already exists. Skipping vectorization.")
+    logger.info(f"Starting vectorization for {collection_name}...")
+    if collection_exists(collection_name):
+        logger.info(f"Collection '{collection_name}' already exists. Skipping vectorization.")
         return
     
     df = pd.read_csv(csv_path)
-    print(f"Read {len(df)} records from {csv_path}")
+    logger.info(f"Read {len(df)} records from {csv_path}")
     
     qdrant_client.create_collection(
         collection_name=collection_name,
         vectors_config=models.VectorParams(
-            size=1536,  # Dimension of the embeddings
+            size=1536,
             distance=models.Distance.COSINE
         )
     )
@@ -276,9 +689,9 @@ def vectorize_and_store(csv_path, collection_name):
         for chunk in chunks:
             embedding = get_embedding(chunk)
             if embedding is None:
-                print(f"Failed to get embedding for chunk: {chunk[:30]}")
+                logger.error(f"Failed to get embedding for chunk: {chunk[:30]}")
                 continue
-            point_id = str(uuid.uuid4())  # Generate a unique UUID for each point
+            point_id = str(uuid.uuid4())
             points.append(models.PointStruct(
                 id=point_id,
                 vector=embedding,
@@ -289,22 +702,22 @@ def vectorize_and_store(csv_path, collection_name):
                 }
             ))
     
-    print(f"Upserting {len(points)} points to {collection_name}")
+    logger.info(f"Upserting {len(points)} points to {collection_name}")
     qdrant_client.upsert(
         collection_name=collection_name,
         points=points
     )
+    logger.info(f"Completed vectorization for {collection_name}.")
 
 recognizer = sr.Recognizer()
 mic_lock = Lock()
 
 def recognize_speech_from_microphone(language="ar", callback=None):
-    """Recognize speech from the microphone."""
     with mic_lock:
         mic = sr.Microphone()
         with mic as source:
             recognizer.adjust_for_ambient_noise(source)
-            print("Listening...")
+            logger.info("Listening...")
             audio = recognizer.listen(source)
         try:
             transcription = recognizer.recognize_google(audio, language=language)
@@ -317,15 +730,12 @@ def recognize_speech_from_microphone(language="ar", callback=None):
             return "Could not request results from Google Speech Recognition service"
 
 def clean_text_for_speech(text):
-    """Clean text for speech by removing unnecessary characters."""
     text = re.sub(r'\*\*\*|\.{2,}', '', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.replace('\n', ' ')
     return text.strip()
 
-def text_to_speech(text, language="ar"):
-    """Convert text to speech."""
-    # Handle unsupported language "dar" by mapping it to "ar"
+def text_to_speech(self, text, language="ar"):
     if language == "dar":
         language = "ar"
     
@@ -334,34 +744,43 @@ def text_to_speech(text, language="ar"):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
         temp_filename = fp.name
         tts.save(temp_filename)
-    pygame.mixer.init()
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
     pygame.mixer.music.load(temp_filename)
     pygame.mixer.music.play()
 
 def play_audio():
-    """Play the audio."""
     if not pygame.mixer.get_init():
         pygame.mixer.init()
     pygame.mixer.music.unpause()
 
 def pause_audio():
-    """Pause the audio."""
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
     pygame.mixer.music.pause()
 
 def replay_audio():
-    """Replay the audio."""
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
     pygame.mixer.music.stop()
     pygame.mixer.music.play()
 
+
+def set_volume(self, volume_level):
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
+    volume = int(volume_level) / 100
+    pygame.mixer.music.set_volume(volume)
+
+
 @lru_cache(maxsize=100)
 def cached_query_qdrant(question, collection_name):
-    """Cached version of querying Qdrant to find the closest matching chunks for the given question."""
     question_embedding = get_embedding(question)
     if question_embedding is None:
         return []
 
     if not collection_exists(collection_name):
-        print(f"Collection '{collection_name}' does not exist.")
+        logger.info(f"Collection '{collection_name}' does not exist.")
         return []
 
     search_result = qdrant_client.search(
@@ -373,49 +792,66 @@ def cached_query_qdrant(question, collection_name):
     return [hit.payload["content"] for hit in search_result]
 
 def generate_response(question, collection_name, quality_mode="good", input_token_limit=2000, output_token_limit=2000, feedback=None):
-    # Define model and max tokens based on quality mode
-    model = "gpt-4"
-    max_tokens = 500
 
-    if quality_mode == "premium":
-        model = "gpt-4o"
-        max_tokens = 2000
-    elif quality_mode == "economy":
-        model = "gpt-3.5-turbo"
-        max_tokens = 300
+    if current_user and current_user.is_authenticated:
+            logger.info(f"Current user: {current_user.username}, Authenticated: {current_user.is_authenticated}")
+    else:
+            logger.error("Current user is None")
+    
+    model_mapping = {
+        "premium": "gpt-4o",
+        "good": "gpt-4",
+        "economy": "gpt-3.5-turbo"
+    }
+    
+    model = model_mapping.get(quality_mode, "gpt-4")
+    max_tokens_mapping = {
+        "premium": 2000,
+        "good": 500,
+        "economy": 300
+    }
+    
+    max_tokens = max_tokens_mapping.get(quality_mode, 500)
+    
+    try:
+        truncated_question = truncate_text(question, input_token_limit)
+        relevant_chunks = cached_query_qdrant(truncated_question, collection_name)
 
-    # Truncate input question based on token limit
-    truncated_question = truncate_text(question, input_token_limit)
+        prompt = (
+            "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
+            + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
+        )
 
-    relevant_chunks = cached_query_qdrant(truncated_question, collection_name)
+        if feedback:
+            prompt += f"\n\nUser feedback:\n{feedback}"
 
-    prompt = (
-        "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
-        + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
-    )
+        prompt += f"\nNow answer the following question: {truncated_question}. Please provide a detailed and accurate response."
+        prompt = truncate_text(prompt, input_token_limit)
 
-    # Incorporate feedback if available
-    if feedback:
-        prompt += f"\n\nUser feedback:\n{feedback}"
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are an AI assistant specialized in agricultural advice."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=output_token_limit
+        )
 
-    prompt += f"\nNow answer the following question: {truncated_question}. Please provide a detailed and accurate response."
+        response_text = response['choices'][0]['message']['content']
 
-    # Ensure the prompt is within the input token limit
-    prompt = truncate_text(prompt, input_token_limit)
+        #Log the interaction if the user is authenticated
+        #log_interaction(current_user.username, question, response_text, collection_name)
+        
+        return response_text
+    except openai.error.OpenAIError as e:
+        logger.error(f"OpenAI API error: {e}")
+        return "An error occurred while generating the response."
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return "An unexpected error occurred while generating the response."
 
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are an AI assistant specialized in agricultural advice."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=output_token_limit
-    )
-
-    return response['choices'][0]['message']['content']
 
 def translate_text(text, target_language):
-    """Translate text to the target language using GPT-4."""
     response = openai.ChatCompletion.create(
         model="gpt-4o",
         messages=[
@@ -423,11 +859,9 @@ def translate_text(text, target_language):
             {"role": "user", "content": text}
         ]
     )
-    
     return response['choices'][0]['message']['content']
 
 def translate_to_darija(text):
-    """Translate text to Moroccan Darija using GPT-4."""
     response = openai.ChatCompletion.create(
         model="gpt-4o",
         messages=[
@@ -435,41 +869,66 @@ def translate_to_darija(text):
             {"role": "user", "content": text}
         ]
     )
-    
     return response['choices'][0]['message']['content']
 
-def user_input_choice(input_lang, output_lang, user_input, input_type="text", quality_mode="good", input_token_limit=800, output_token_limit=500, feedback=None):
-    """Process user input and generate a response."""
+import psutil
+
+def print_system_usage():
+    # CPU usage
+    cpu_percent = psutil.cpu_percent(interval=1)
+    cpu_times = psutil.cpu_times()
+    print(f"CPU Usage: {cpu_percent}%")
+    print(f"CPU Times: user={cpu_times.user}, system={cpu_times.system}, idle={cpu_times.idle}")
+
+    # Memory usage
+    virtual_memory = psutil.virtual_memory()
+    print(f"Memory Usage: {virtual_memory.percent}%")
+    print(f"Memory Details: total={virtual_memory.total / (1024 ** 3):.2f} GB, available={virtual_memory.available / (1024 ** 3):.2f} GB, used={virtual_memory.used / (1024 ** 3):.2f} GB, free={virtual_memory.free / (1024 ** 3):.2f} GB")
+
+    # Disk usage
+    disk_usage = psutil.disk_usage('/')
+    print(f"Disk Usage: {disk_usage.percent}%")
+    print(f"Disk Details: total={disk_usage.total / (1024 ** 3):.2f} GB, used={disk_usage.used / (1024 ** 3):.2f} GB, free={disk_usage.free / (1024 ** 3):.2f} GB")
+
+    # Network usage
+    net_io = psutil.net_io_counters()
+    print(f"Network Usage: bytes_sent={net_io.bytes_sent / (1024 ** 2):.2f} MB, bytes_recv={net_io.bytes_recv / (1024 ** 2):.2f} MB")
+
+
+def user_input_choice(user_info, input_lang, output_lang, user_input, input_type="text", quality_mode="good", input_token_limit=800, output_token_limit=500, feedback=None):
+    if not user_info.get('authenticated', False):
+        logger.error("User is not authenticated")
+        return "User is not authenticated. Please log in."
+
     if input_type == "voice":
-        print("Please speak into the microphone...")
+        logger.info("Please speak into the microphone...")
         speech_text = recognize_speech_from_microphone(language=input_lang)
-        print(f"Recognized Speech: {speech_text}")
+        logger.info(f"Recognized Speech: {speech_text}")
         response_text = generate_response(speech_text, "agriculture_ar" if input_lang == "ar" else "agriculture_fr", quality_mode, input_token_limit, output_token_limit, feedback)
         if output_lang == "dar":
             response_text = translate_to_darija(response_text)
         elif input_lang != output_lang:
             response_text = translate_text(response_text, output_lang)
-        print(f"Response: {response_text}")
+        logger.info(f"Response: {response_text}")
         return response_text
     elif input_type == "text":
-        print(f"Received Text: {user_input}")
+        logger.info(f"Received Text: {user_input}")
         response_text = generate_response(user_input, "agriculture_ar" if input_lang == "ar" else "agriculture_fr", quality_mode, input_token_limit, output_token_limit, feedback)
         if output_lang == "dar":
             response_text = translate_to_darija(response_text)
         elif input_lang != output_lang:
             response_text = translate_text(response_text, output_lang)
-        print(f"Response: {response_text}")
+        logger.info(f"Response: {response_text}")
         return response_text
     else:
-        print("Invalid choice. Please enter 'voice' or 'text'.")
+        logger.error("Invalid choice. Please enter 'voice' or 'text'.")
         return "Invalid choice."
 
+
 def format_rtl_text(text):
-    """Format text for right-to-left languages."""
     return f"\u202B{text}\u202C"
 
 def log_interaction(user, question, response, collection_name):
-    """Log user interaction for LLMOps."""
     log_data = {
         "timestamp": time.time(),
         "user": user,
@@ -477,28 +936,66 @@ def log_interaction(user, question, response, collection_name):
         "response": response,
         "collection_name": collection_name
     }
-    with open("interaction_logs.json", "a") as log_file:
-        log_file.write(json.dumps(log_data) + "\n")
+
+    # Log interaction to JSON file
+    log_file_path = "interaction_logs.json"
     
-    # Log to MLflow
-    with mlflow.start_run():
-        mlflow.log_param("user", user)
-        mlflow.log_param("question", question)
-        mlflow.log_param("response", response)
-        mlflow.log_param("collection_name", collection_name)
-        mlflow.log_metric("timestamp", log_data["timestamp"])
+    try:
+        # Check if the log file exists
+        if not os.path.exists(log_file_path):
+            with open(log_file_path, "w", encoding='utf-8') as log_file:
+                json.dump([log_data], log_file, ensure_ascii=False, indent=4)
+                logger.info("interaction_logs.json file created and interaction logged.")
+        else:
+            # Load existing log data
+            with open(log_file_path, "r+", encoding='utf-8') as log_file:
+                try:
+                    data = json.load(log_file)
+                except json.JSONDecodeError:
+                    data = []
+                data.append(log_data)
+                log_file.seek(0)
+                json.dump(data, log_file, ensure_ascii=False, indent=4)
+                logger.info("Logged interaction: %s", log_data)
+    except Exception as e:
+        logger.error("Failed to log interaction: %s", e)
+
+    # Log interaction to MLflow
+    try:
+        with mlflow.start_run():
+            mlflow.log_param("user", user)
+            mlflow.log_param("question", question)
+            mlflow.log_param("response", response)
+            mlflow.log_param("collection_name", collection_name)
+            mlflow.log_metric("timestamp", log_data["timestamp"])
+        logger.info("Logged interaction to MLflow: %s", log_data)
+    except Exception as e:
+        logger.error("Failed to log interaction to MLflow: %s", e)
+
+
+
+
+
+
 
 def generate_report():
-    """Generate a report of user interactions."""
     interactions = []
     try:
-        with open("interaction_logs.json", "r") as log_file:
-            for line in log_file:
-                interactions.append(json.loads(line))
-    except FileNotFoundError:
-        pass
+        if os.path.exists("interaction_logs.json"):
+            with open("interaction_logs.json", "r", encoding='utf-8') as log_file:
+                data = json.load(log_file)
+                interactions.extend(data)
+                logger.info(f"Interactions loaded: {interactions}")
+        else:
+            logger.warning("interaction_logs.json file not found.")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding JSON file: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error reading interaction logs: {e}")
 
-    return pd.DataFrame(interactions)
+    df = pd.DataFrame(interactions)
+    logger.info(f"Generated report with {len(df)} interactions")
+    return df
 
 class Application(ctk.CTk):
     def __init__(self):
@@ -515,24 +1012,47 @@ class Application(ctk.CTk):
         self.accuracy_var = ctk.IntVar()
         self.fluency_var = ctk.IntVar()
 
+        self.theme = "light"  # Default theme
         self.show_login_window()
 
-        # Cache dictionary for storing prompts and their responses
         self.cache = load_cache()
 
+    def update_true_text(self):
+        new_true_text = simpledialog.askstring("Update True Text", "Enter new true text:")
+        if new_true_text:
+            try:
+                response = requests.post('http://localhost:5005/update_true_text', json={'true_text': new_true_text})
+                response.raise_for_status()
+                messagebox.showinfo("Success", "True text updated successfully")
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror("Error", f"Failed to update true text: {e}")
+
+    def text_to_speech(self, text, language="ar"):
+        if language == "dar":
+            language = "ar"
+        
+        clean_text = clean_text_for_speech(text)
+        tts = gTTS(text=clean_text, lang=language)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+            temp_filename = fp.name
+            tts.save(temp_filename)
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+        pygame.mixer.music.load(temp_filename)
+        pygame.mixer.music.play()
+
     def show_login_window(self):
-        """Display the login window."""
         self.login_window = ctk.CTkToplevel(self)
         self.login_window.title("Login")
-        self.login_window.geometry("500x500")
+        self.login_window.geometry("700x700")
         self.login_window.iconbitmap("icon.ico")
 
         logo_path = "uni.png"
         logo_image = Image.open(logo_path)
-        logo_image = logo_image.resize((100, 100), Image.LANCZOS)
+        logo_image = logo_image.resize((120, 120), Image.LANCZOS)
         logo_photo = ImageTk.PhotoImage(logo_image)
         ctk.CTkLabel(self.login_window, image=logo_photo, text="").grid(row=0, column=0, columnspan=2, pady=10)
-        self.login_window.logo_photo = logo_photo  # Keep a reference to prevent garbage collection
+        self.login_window.logo_photo = logo_photo
 
         ctk.CTkLabel(self.login_window, text="Username", font=("Helvetica", 14)).grid(row=1, column=0, padx=10, pady=10)
         ctk.CTkLabel(self.login_window, text="Password", font=("Helvetica", 14)).grid(row=2, column=0, padx=10, pady=10)
@@ -549,26 +1069,32 @@ class Application(ctk.CTk):
         self.language_combobox.grid(row=3, column=1, padx=10, pady=10)
         self.language_combobox.set("AR")
 
-        ctk.CTkButton(self.login_window, text="Login", command=self.login, font=("Helvetica", 12)).grid(row=4, column=0, columnspan=2, pady=10)
-        ctk.CTkButton(self.login_window, text="Register", command=self.register, font=("Helvetica", 12)).grid(row=5, column=0, columnspan=2, pady=10)
+        ctk.CTkButton(self.login_window, text="Login", command=self.login, font=("Helvetica", 14)).grid(row=4, column=0, columnspan=2, pady=10)
+        ctk.CTkButton(self.login_window, text="Register", command=self.register, font=("Helvetica", 14)).grid(row=5, column=0, columnspan=2, pady=10)
 
     def login(self):
-        """Handle user login."""
         username = self.username_entry.get()
         password = self.password_entry.get()
-        language = self.language_var.get()
+        logger.info(f"Attempting GUI login for user: {username}")
 
-        if self.authenticate(username, password):
+        response = requests.post('http://localhost:5005/login', json={'username': username, 'password': password})
+        if response.status_code == 200:
+            response_data = response.json()
             self.username = username
-            self.language = language
+            self.user_info = response_data.get('user_info')
+            logger.info(f"user_info set to: {self.user_info}")
+            self.user_info['authenticated'] = True
+            self.language = self.language_combobox.get() 
             self.login_window.destroy()
             self.show_main_window()
-            self.translate_app()
+            self.translate_app() 
+            logger.info(f"User {username} logged in successfully via GUI")
         else:
+            logger.error("Invalid credentials from GUI")
             messagebox.showerror("Error", "Invalid credentials")
 
+
     def authenticate(self, username, password):
-        """Authenticate the user."""
         hashed_password = hash_password(password)
         for user in users.values():
             if user.username == username and user.password == hashed_password:
@@ -576,7 +1102,6 @@ class Application(ctk.CTk):
         return False
 
     def register(self):
-        """Handle user registration."""
         username = self.username_entry.get()
         password = self.password_entry.get()
 
@@ -590,13 +1115,15 @@ class Application(ctk.CTk):
             messagebox.showinfo("Success", "User registered successfully")
 
     def translate_app(self):
-        """Translate the application based on the selected language."""
         if self.language == "AR":
             self.translate_to_arabic()
         elif self.language == "FR":
             self.translate_to_french()
         elif self.language == "DAR":
             self.translate_to_darija()
+    def show_dashboard(self):
+        webbrowser.open('http://localhost:5005/dashboard')
+
 
     def translate_to_arabic(self):
         self.input_label.configure(text="نص المدخلات:")
@@ -607,7 +1134,6 @@ class Application(ctk.CTk):
         self.output_token_label.configure(text="حد المخرجات:")
         self.output_label.configure(text="نص الإخراج:")
         self.submit_button.configure(text="إرسال")
-        self.submit_text_button.configure(text="إرسال")
         self.record_button.configure(text="تسجيل")
         self.stop_button.configure(text="إيقاف التسجيل")
         self.speak_button.configure(text="قراءة الإخراج بصوت عال")
@@ -630,7 +1156,6 @@ class Application(ctk.CTk):
         self.output_token_label.configure(text="Limite de tokens de sortie :")
         self.output_label.configure(text="Texte de sortie :")
         self.submit_button.configure(text="Soumettre")
-        self.submit_text_button.configure(text="Soumettre")
         self.record_button.configure(text="Enregistrer")
         self.stop_button.configure(text="Arrêter l'enregistrement")
         self.speak_button.configure(text="Lire le texte de sortie à haute voix")
@@ -653,7 +1178,6 @@ class Application(ctk.CTk):
         self.output_token_label.configure(text="حد المخرجات:")
         self.output_label.configure(text="النص الإخراج:")
         self.submit_button.configure(text="إرسال")
-        self.submit_text_button.configure(text="إرسال")
         self.record_button.configure(text="تسجيل")
         self.stop_button.configure(text="إيقاف التسجيل")
         self.speak_button.configure(text="قراءة الإخراج بصوت عالي")
@@ -667,128 +1191,227 @@ class Application(ctk.CTk):
         self.feedback_label.configure(text="ملاحظات (اختياري):")
         self.submit_feedback_button.configure(text="إرسال الملاحظات")
 
-    def show_main_window(self):
-        """Display the main application window."""
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=1)
+    def show_help(self):
+        def open_docs():
+            webbrowser.open("index.html")  # Adjust the path if necessary
 
-        self.input_label = ctk.CTkLabel(self, text="Input Text:", font=("Helvetica", 14))
+        help_window = ctk.CTkToplevel(self)
+        help_window.title("Help")
+        help_window.geometry("800x600")
+        help_window.iconbitmap("icon.ico")
+
+        help_text = """
+        Welcome to the AI AgriAdvisor application!
+
+        Here are some features you can use:
+        - **Login/Register**: Use the login screen to enter your credentials. If you don't have an account, you can register for one.
+        - **Input Text**: Enter the text you want to process in the "Input Text" field.
+        - **Select Input/Output Language**: Choose the input and output languages from the dropdown menus.
+        - **Quality Mode**: Select the desired quality mode for the response (economy, good, premium).
+        - **Token Limits**: Set the input and output token limits.
+        - **Submit**: Click "Submit" to process the input text and get a response.
+        - **Record Audio**: Click "Record" to start recording your voice, and "Stop Recording" to end it. The application will transcribe your speech.
+        - **Read Aloud Output**: Click "Read Aloud Output" to listen to the response.
+        - **Volume Control**: Adjust the volume using the slider.
+        - **Seek Bar**: Use the seek bar to navigate through the audio.
+        - **Generate Report**: Click "Generate Report" to view the interaction report.
+        - **Feedback**: Provide feedback on the response by filling out the feedback form.
+
+        For more detailed instructions, visit our documentation.
+        """
+
+        help_label = ctk.CTkLabel(help_window, text=help_text, wraplength=700, font=("Helvetica", 14))
+        help_label.pack(padx=20, pady=20)
+
+        docs_button = ctk.CTkButton(help_window, text="Open Documentation", command=open_docs, font=("Helvetica", 14))
+        docs_button.pack(pady=10)
+
+
+    def show_main_window(self):
+        self.canvas = Canvas(self)
+        self.scrollbar = Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = Frame(self.canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")
+            )
+        )
+
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        self.scrollable_frame.grid_columnconfigure(0, weight=1)
+        self.scrollable_frame.grid_columnconfigure(1, weight=1)
+        self.scrollable_frame.grid_columnconfigure(2, weight=1)
+
+        self.input_label = ctk.CTkLabel(self.scrollable_frame, text="Input Text:", font=("Helvetica", 14))
         self.input_label.grid(row=0, column=0, pady=5, sticky='nsew')
 
-        # Add Scrollbar for input text
-        self.input_scrollbar = Scrollbar(self, width=10)
-        self.input_text = ctk.CTkTextbox(self, wrap='word', width=400, height=200, font=("Helvetica", 14), yscrollcommand=self.input_scrollbar.set)
+        self.input_scrollbar = Scrollbar(self.scrollable_frame, width=10)
+        self.input_text = ctk.CTkTextbox(self.scrollable_frame, wrap='word', font=("Helvetica", 14), yscrollcommand=self.input_scrollbar.set)
         self.input_text.grid(row=1, column=0, padx=5, pady=5, sticky='nsew')
         self.input_scrollbar.grid(row=1, column=1, sticky='nsew')
         self.input_scrollbar.config(command=self.input_text.yview)
 
-        self.lang_label = ctk.CTkLabel(self, text="Select Input Language:", font=("Helvetica", 14))
+        self.lang_label = ctk.CTkLabel(self.scrollable_frame, text="Select Input Language:", font=("Helvetica", 14))
         self.lang_label.grid(row=2, column=0, pady=5, sticky='nsew')
-        self.input_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Helvetica", 14))
+        self.input_lang = ctk.CTkComboBox(self.scrollable_frame, values=["ar", "fr", "dar"], font=("Helvetica", 14))
         self.input_lang.grid(row=3, column=0, pady=5, sticky='nsew')
         
-        self.output_lang_label = ctk.CTkLabel(self, text="Select Output Language:", font=("Helvetica", 14))
+        self.output_lang_label = ctk.CTkLabel(self.scrollable_frame, text="Select Output Language:", font=("Helvetica", 14))
         self.output_lang_label.grid(row=4, column=0, pady=5, sticky='nsew')
-        self.output_lang = ctk.CTkComboBox(self, values=["ar", "fr", "dar"], font=("Helvetica", 14))
+        self.output_lang = ctk.CTkComboBox(self.scrollable_frame, values=["ar", "fr", "dar"], font=("Helvetica", 14))
         self.output_lang.grid(row=5, column=0, pady=5, sticky='nsew')
         
-        self.quality_label = ctk.CTkLabel(self, text="Select Quality Mode:", font=("Helvetica", 14))
+        self.quality_label = ctk.CTkLabel(self.scrollable_frame, text="Select Quality Mode:", font=("Helvetica", 14))
         self.quality_label.grid(row=6, column=0, pady=5, sticky='nsew')
-        self.quality_mode = ctk.CTkComboBox(self, values=["economy", "good", "premium"], font=("Helvetica", 14))
+        self.quality_mode = ctk.CTkComboBox(self.scrollable_frame, values=["economy", "good", "premium"], font=("Helvetica", 14))
         self.quality_mode.grid(row=7, column=0, pady=5, sticky='nsew')
 
-        self.input_token_label = ctk.CTkLabel(self, text="Input Token Limit:", font=("Helvetica", 14))
+        self.input_token_label = ctk.CTkLabel(self.scrollable_frame, text="Input Token Limit:", font=("Helvetica", 14))
         self.input_token_label.grid(row=8, column=0, pady=5, sticky='nsew')
-        self.input_token_limit = ctk.CTkEntry(self, font=("Helvetica", 14))
+        self.input_token_limit = ctk.CTkEntry(self.scrollable_frame, font=("Helvetica", 14))
         self.input_token_limit.grid(row=9, column=0, pady=5, sticky='nsew')
         self.input_token_limit.insert(0, "800")
 
-        self.output_token_label = ctk.CTkLabel(self, text="Output Token Limit:", font=("Helvetica", 14))
+        self.output_token_label = ctk.CTkLabel(self.scrollable_frame, text="Output Token Limit:", font=("Helvetica", 14))
         self.output_token_label.grid(row=10, column=0, pady=5, sticky='nsew')
-        self.output_token_limit = ctk.CTkEntry(self, font=("Helvetica", 14))
+        self.output_token_limit = ctk.CTkEntry(self.scrollable_frame, font=("Helvetica", 14))
         self.output_token_limit.grid(row=11, column=0, pady=5, sticky='nsew')
         self.output_token_limit.insert(0, "500")
 
-        self.submit_button = ctk.CTkButton(self, text="Submit", command=self.process_input, font=("Helvetica", 12))
+        self.submit_button = ctk.CTkButton(self.scrollable_frame, text="Submit", command=self.process_input, font=("Helvetica", 14))
         self.submit_button.grid(row=12, column=0, pady=5)
 
-        self.output_label = ctk.CTkLabel(self, text="Output Text:", font=("Helvetica", 14))
+        self.output_label = ctk.CTkLabel(self.scrollable_frame, text="Output Text:", font=("Helvetica", 14))
         self.output_label.grid(row=0, column=2, pady=5, sticky='nsew')
 
-        # Add Scrollbar for output text
-        self.output_scrollbar = Scrollbar(self, width=10)
-        self.output_text = ctk.CTkTextbox(self, wrap='word', width=400, height=200, font=("Helvetica", 14), yscrollcommand=self.output_scrollbar.set)
+        self.output_scrollbar = Scrollbar(self.scrollable_frame, width=10)
+        self.output_text = ctk.CTkTextbox(self.scrollable_frame, wrap='word', font=("Helvetica", 14), yscrollcommand=self.output_scrollbar.set)
         self.output_text.grid(row=1, column=2, padx=5, pady=5, sticky='nsew')
         self.output_scrollbar.grid(row=1, column=3, sticky='nsew')
         self.output_scrollbar.config(command=self.output_text.yview)
 
-        self.f1_score_value = ctk.CTkLabel(self, text="F1 Score: N/A", font=("Helvetica", 14))
+        self.f1_score_value = ctk.CTkLabel(self.scrollable_frame, text="F1 Score: N/A", font=("Helvetica", 14))
         self.f1_score_value.grid(row=2, column=2, pady=5, sticky='nsew')
-        self.rouge_l_score_value = ctk.CTkLabel(self, text="ROUGE-L: N/A", font=("Helvetica", 14))
+        self.rouge_l_score_value = ctk.CTkLabel(self.scrollable_frame, text="ROUGE-L: N/A", font=("Helvetica", 14))
         self.rouge_l_score_value.grid(row=3, column=2, pady=5, sticky='nsew')
-        self.sacrebleu_score_value = ctk.CTkLabel(self, text="sacreBLEU: N/A", font=("Helvetica", 14))
+        self.sacrebleu_score_value = ctk.CTkLabel(self.scrollable_frame, text="sacreBLEU: N/A", font=("Helvetica", 14))
         self.sacrebleu_score_value.grid(row=4, column=2, pady=5, sticky='nsew')
 
-        self.record_button = ctk.CTkButton(self, text="Record", command=self.start_recording, font=("Helvetica", 14))
-        self.record_button.grid(row=5, column=1, pady=5)
+        self.record_button = ctk.CTkButton(self.scrollable_frame, text="Record", command=self.start_recording, font=("Helvetica", 14))
+        self.record_button.grid(row=5, column=3, pady=5)
 
-        self.stop_button = ctk.CTkButton(self, text="Stop Recording", command=self.stop_recording, font=("Helvetica", 14))
-        self.stop_button.grid(row=6, column=1, pady=5)
+        self.stop_button = ctk.CTkButton(self.scrollable_frame, text="Stop Recording", command=self.stop_recording, font=("Helvetica", 14))
+        self.stop_button.grid(row=6, column=3, pady=5)
         self.stop_button.configure(state="disabled")
 
-        self.speak_button = ctk.CTkButton(self, text="Read Aloud Output", command=self.read_aloud_output, font=("Helvetica", 14))
-        self.speak_button.grid(row=7, column=1, pady=5)
+        self.speak_button = ctk.CTkButton(self.scrollable_frame, text="Read Aloud Output", command=self.read_aloud_output, font=("Helvetica", 14))
+        self.speak_button.grid(row=7, column=3, pady=5)
 
-        self.play_button = ctk.CTkButton(self, text="▶ Play", command=play_audio, font=("Helvetica", 14))
-        self.play_button.grid(row=8, column=1, pady=5)
+        self.play_button = ctk.CTkButton(self.scrollable_frame, text="▶ Play", command=play_audio, font=("Helvetica", 14))
+        self.play_button.grid(row=8, column=3, pady=5)
 
-        self.pause_button = ctk.CTkButton(self, text="⏸ Pause", command=pause_audio, font=("Helvetica", 14))
-        self.pause_button.grid(row=9, column=1, pady=5)
+        self.pause_button = ctk.CTkButton(self.scrollable_frame, text="⏸ Pause", command=pause_audio, font=("Helvetica", 14))
+        self.pause_button.grid(row=9, column=3, pady=5)
 
-        self.replay_button = ctk.CTkButton(self, text="⏪ Replay", command=replay_audio, font=("Helvetica", 14))
-        self.replay_button.grid(row=10, column=1, pady=5)
+        self.replay_button = ctk.CTkButton(self.scrollable_frame, text="⏪ Replay", command=replay_audio, font=("Helvetica", 14))
+        self.replay_button.grid(row=10, column=3, pady=5)
 
-        self.report_button = ctk.CTkButton(self, text="Generate Report", command=self.display_report, font=("Helvetica", 14))
-        self.report_button.grid(row=11, column=1, pady=5)
+        # Add volume control slider
+        self.volume_label = ctk.CTkLabel(self.scrollable_frame, text="Volume Control", font=("Helvetica", 14))
+        self.volume_label.grid(row=12, column=3, pady=5, sticky='nsew')
+        self.volume_slider = Scale(self.scrollable_frame, from_=0, to=100, orient=HORIZONTAL, command=self.set_volume)
+        self.volume_slider.set(50)
+        self.volume_slider.grid(row=13, column=3, pady=5, sticky='nsew')
 
-        self.user_info_label = ctk.CTkLabel(self, text=f"Logged in as: {self.username}", font=("Helvetica", 14))
-        self.user_info_label.grid(row=12, column=1, pady=5, sticky='w')
+        # Add seek bar
+        self.seek_label = ctk.CTkLabel(self.scrollable_frame, text="Seek Bar", font=("Helvetica", 14))
+        self.seek_label.grid(row=14, column=3, pady=5, sticky='nsew')
+        self.seek_slider = Scale(self.scrollable_frame, from_=0, to=100, orient=HORIZONTAL, command=self.seek_audio)
+        self.seek_slider.grid(row=15, column=3, pady=5, sticky='nsew')
 
-        self.logout_button = ctk.CTkButton(self, text="Logout", command=self.logout, font=("Helvetica", 14))
-        self.logout_button.grid(row=12, column=2, pady=5, sticky='e')
+        self.help_button = ctk.CTkButton(self.scrollable_frame, text="Help", command=self.show_help, font=("Helvetica", 14))
+        self.help_button.grid(row=20, column=3, pady=5)
 
-        self.recording_label = ctk.CTkLabel(self, text="Recording... Please speak into the microphone", text_color="red", font=("Helvetica", 14))
+        self.dashboard_button = ctk.CTkButton(self.scrollable_frame, text="Dashboard", command=self.show_dashboard, font=("Helvetica", 14))
+        self.dashboard_button.grid(row=21, column=3, pady=5)
+
+
+
+        self.report_button = ctk.CTkButton(self.scrollable_frame, text="Generate Report", command=self.display_report, font=("Helvetica", 14))
+        self.report_button.grid(row=11, column=3, pady=5)
+
+        self.user_info_label = ctk.CTkLabel(self.scrollable_frame, text=f"Logged in as: {self.username}", font=("Helvetica", 14))
+        self.user_info_label.grid(row=12, column=4, pady=5, sticky='w')
+
+        self.logout_button = ctk.CTkButton(self.scrollable_frame, text="Logout", command=self.logout, font=("Helvetica", 14))
+        self.logout_button.grid(row=12, column=5, pady=5, sticky='e')
+
+        self.recording_label = ctk.CTkLabel(self.scrollable_frame, text="Recording... Please speak into the microphone", text_color="red", font=("Helvetica", 14))
         self.recording_label.grid(row=13, column=0, columnspan=3, pady=5)
         self.recording_label.grid_remove()
 
-        self.transcription_label = ctk.CTkLabel(self, text="", text_color="blue", font=("Helvetica", 14))
+        self.transcription_label = ctk.CTkLabel(self.scrollable_frame, text="", text_color="blue", font=("Helvetica", 14))
         self.transcription_label.grid(row=14, column=0, columnspan=3, pady=5)
         self.transcription_label.grid_remove()
 
-        self.feedback_label = ctk.CTkLabel(self, text="Feedback (Optional):", font=("Helvetica", 14))
+        self.feedback_label = ctk.CTkLabel(self.scrollable_frame, text="Feedback (Optional):", font=("Helvetica", 14))
         self.feedback_label.grid(row=15, column=0, pady=5, sticky='nsew')
-        self.feedback_scrollbar = Scrollbar(self, width=10)
-        self.feedback_text = ctk.CTkTextbox(self, wrap='word', width=10, height=10, font=("Helvetica", 14), yscrollcommand=self.feedback_scrollbar.set)
+        self.feedback_scrollbar = Scrollbar(self.scrollable_frame, width=10)
+        self.feedback_text = ctk.CTkTextbox(self.scrollable_frame, wrap='word', width=10, height=10, font=("Helvetica", 14), yscrollcommand=self.feedback_scrollbar.set)
         self.feedback_text.grid(row=16, column=0, padx=5, pady=5, sticky='nsew')
         self.feedback_scrollbar.grid(row=16, column=1, sticky='nsew')
         self.feedback_scrollbar.config(command=self.feedback_text.yview)
 
-        self.submit_feedback_button = ctk.CTkButton(self, text="Submit Feedback", command=self.submit_feedback, font=("Helvetica", 12))
+        self.submit_feedback_button = ctk.CTkButton(self.scrollable_frame, text="Submit Feedback", command=self.submit_feedback, font=("Helvetica", 14))
         self.submit_feedback_button.grid(row=17, column=0, pady=5)
 
-        self.submit_text_button = ctk.CTkButton(self, text="Submit Text", command=self.process_input, font=("Helvetica", 12))
-        self.submit_text_button.grid(row=17, column=1, pady=5)
+        self.show_user_info_button = ctk.CTkButton(self.scrollable_frame, text="Show User Info", command=self.show_user_info, font=("Helvetica", 14))
+        self.show_user_info_button.grid(row=18, column=2, pady=5)
+
+        self.update_user_button = ctk.CTkButton(self.scrollable_frame, text="Update User", command=self.update_user_details, font=("Helvetica", 14))
+        self.update_user_button.grid(row=18, column=3, pady=5)
+
+        self.delete_user_button = ctk.CTkButton(self.scrollable_frame, text="Delete User", command=self.delete_user, font=("Helvetica", 14))
+        self.delete_user_button.grid(row=18, column=4, pady=5)
+
+        self.update_true_text_button = ctk.CTkButton(self.scrollable_frame, text="Update True Text", command=self.update_true_text, font=("Helvetica", 14))
+        self.update_true_text_button.grid(row=19, column=4, pady=5)
+
+        # Add theme toggle button
+        self.theme_toggle_button = ctk.CTkButton(self.scrollable_frame, text="Toggle Theme", command=self.toggle_theme, font=("Helvetica", 14))
+        self.theme_toggle_button.grid(row=20, column=4, pady=5)
+
+        # Ensure the main window grid resizes with the window
+        for i in range(21):
+            self.scrollable_frame.grid_rowconfigure(i, weight=1)
+        self.scrollable_frame.grid_columnconfigure(0, weight=1)
+        self.scrollable_frame.grid_columnconfigure(2, weight=1)
+        self.scrollable_frame.grid_columnconfigure(3, weight=1)
+        self.scrollable_frame.grid_columnconfigure(4, weight=1)
+        self.scrollable_frame.grid_columnconfigure(5, weight=1)
+
+    def toggle_theme(self):
+        if self.theme == "light":
+            self.theme = "dark"
+            ctk.set_appearance_mode("dark")
+        else:
+            self.theme = "light"
+            ctk.set_appearance_mode("light")
 
     def logout(self):
-        """Handle user logout."""
         self.username = None
         for widget in self.winfo_children():
             widget.destroy()
         self.show_login_window()
 
     def process_input(self):
-        """Process the text input."""
         user_input = self.input_text.get("1.0", 'end').strip()
         input_lang = self.input_lang.get()
         output_lang = self.output_lang.get()
@@ -797,25 +1420,45 @@ class Application(ctk.CTk):
         output_token_limit = self.validate_token_limit(self.output_token_limit.get())
         additional_comments = self.feedback_text.get("1.0", 'end').strip()
 
+        # Validate required fields
         if not user_input or not input_lang or not output_lang or not quality_mode:
             messagebox.showerror("Error", "All fields must be filled")
             return
 
+        # Validate token limits
         if input_token_limit is None or output_token_limit is None:
             messagebox.showerror("Error", "Token limits must be valid integers")
             return
 
-        # Create a unique cache key based on user details, LLM mode, and input
+        # Check for user authentication
+        user_info = self.user_info  # Use the stored user information
+        if user_info is None or not user_info.get('authenticated', False):
+            messagebox.showerror("Error", "User is not authenticated. Please log in.")
+            return
+
+        # Generate cache key
         cache_key = f"{self.username}:{quality_mode}:{input_lang}:{output_lang}:{user_input}"
 
-        # Check if the user input is in cache and additional comments are not provided
+        # Check cache for response
         if cache_key in self.cache and not additional_comments:
             response_text = self.cache[cache_key]['response']
             feedback = self.cache[cache_key].get('feedback', None)
             self.update_output_text(response_text, feedback)
         else:
-            # Generate response with consideration of additional comments if provided
-            Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit, additional_comments)).start()
+            # Process user input in a separate thread to keep UI responsive
+            Thread(target=run_user_input_choice, args=(
+                user_info, 
+                input_lang, 
+                output_lang, 
+                user_input, 
+                "text", 
+                cache_key, 
+                quality_mode,
+                input_token_limit, 
+                output_token_limit, 
+                additional_comments
+            )).start()
+
 
     def validate_token_limit(self, token_limit):
         try:
@@ -824,23 +1467,19 @@ class Application(ctk.CTk):
             return None
 
     def start_recording(self):
-        """Start recording audio."""
         self.recording = True
         self.record_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
         self.recording_label.grid()
-
         Thread(target=self.record_audio).start()
 
     def stop_recording(self):
-        """Stop recording audio."""
         self.recording = False
         self.record_button.configure(state="normal")
         self.stop_button.configure(state="disabled")
         self.recording_label.grid_remove()
 
     def record_audio(self):
-        """Record audio from the microphone."""
         p = pyaudio.PyAudio()
         stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=1024)
         self.frames = []
@@ -856,7 +1495,6 @@ class Application(ctk.CTk):
         self.save_audio()
 
     def save_audio(self):
-        """Save recorded audio to a file."""
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as fp:
             self.audio_filename = fp.name
 
@@ -870,7 +1508,6 @@ class Application(ctk.CTk):
         self.transcribe_audio()
 
     def transcribe_audio(self):
-        """Transcribe audio to text."""
         recognizer = sr.Recognizer()
         with sr.AudioFile(self.audio_filename) as source:
             audio = recognizer.record(source)
@@ -884,10 +1521,9 @@ class Application(ctk.CTk):
             except sr.RequestError:
                 self.update_transcription_label("Could not request results from Google Speech Recognition service")
 
-    def run_user_input_choice(self, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
-        """Run the user input choice function in a separate thread."""
+    def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
         collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
-        
+
         if not collection_exists(collection_name):
             response_text = f"The collection '{collection_name}' does not exist. Please ensure the data is processed and the collection is created."
         else:
@@ -898,99 +1534,78 @@ class Application(ctk.CTk):
                 elif input_lang != output_lang:
                     response_text = translate_text(response_text, output_lang)
             else:
-                response_text = user_input_choice(input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit, feedback)
-            
+                response_text = user_input_choice(user_info, input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit, feedback)
+
             if output_lang == "ar":
                 response_text = format_rtl_text(response_text)
-        self.cache[cache_key] = {'response': response_text, 'feedback': feedback}  # Cache the response and feedback
-        save_cache(self.cache)  # Save the updated cache
-        self.after(0, self.update_output_text, response_text)
+        app.cache[cache_key] = {'response': response_text, 'feedback': feedback}
+        save_cache(app.cache)
+        app.after(0, app.update_output_text, response_text)
+
+
+
+
+
 
     def update_output_text(self, response_text, feedback=None):
-        """Update the output text widget and compute scores."""
         self.output_text.delete("1.0", 'end')
         self.output_text.insert('end', response_text)
-
-        # Assume true_text is the expected or benchmark response (this should be defined or retrieved from your dataset)
-        true_text = """
-            L'Office National du Conseil Agricole (ONCA) est une organisation dédiée au service des agriculteurs, créée en vertu de la loi 58-12 promulguée par le Dahir N°1.12.67 du 4 Rabii I 1434 (16 Janvier 2013). L'ONCA a été établi pour répondre aux missions de conseil agricole et garantir une bonne intégration de l'office dans son environnement institutionnel.
-
-            **Structure Organisationnelle :**
-            L'ONCA est structuré en trois directions principales au niveau central :
-            1. **Direction d'Ingénierie du Conseil Agricole :** Responsable de la coordination et du suivi de l'élaboration des plans d'action régionaux annuels de conseil agricole, de la préparation des programmes et budgets annuels et pluriannuels de conseil agricole au niveau national, ainsi que de l'allocation des ressources aux différents acteurs du conseil agricole.
-            2. **Direction des Opérations**
-            3. **Direction des Ressources Humaines et Support**
-
-            **Missions et Activités :**
-            - Le renforcement des partenariats public-privé.
-            - L'organisation et le déploiement du métier de conseiller agricole privé au niveau national dans le cadre de la contractualisation (loi 62-12).
-            - Une refonte du réseau des entités locales de conseil agricole, favorisant la mobilité des conseillers publics et l'optimisation des moyens, a conduit à l'absorption de 122 Centres Techniques (CT) au sein de l'ONCA.
-
-            **Gouvernance :**
-            Le dispositif de conseil agricole au niveau national est piloté et gouverné par l'ONCA. Au niveau régional, la coordination et l'animation sont sous la responsabilité des Directions Régionales du Conseil Agricole (DRCA).
-
-            **Nouveaux Centres de Conseil Agricole (CCA) :**
-            Ces centres ont rapidement constitué des points d'attraction pour les agriculteurs, contribuant à la diffusion des bonnes pratiques agricoles à travers diverses méthodes de communication, y compris des vidéos en motion design et des podcasts agricoles.
-
-            **Productions et Communication :**
-            L'ONCA utilise des plateformes telles que ARDNA, les réseaux sociaux, et les chaînes TV pour diffuser des vidéos éducatives sur différentes filières agricoles. Ces vidéos sont partagées avec les conseillers agricoles pour être ensuite transmises aux agriculteurs. Les mascottes de l'ONCA sont mises en avant dans
-            """
-
-        # Compute scores
         f1 = compute_f1_score(true_text, response_text)
         rouge_l = compute_rouge_l(true_text, response_text)
-        sacrebleu_score = compute_sacrebleu(true_text, response_text)
+        sacrebleu_score = compute_sacrebleu(true_text, response_text).score
 
-        # Update the scores in the GUI
         self.f1_score_value.configure(text=f"F1 Score: {f1:.2f}")
         self.rouge_l_score_value.configure(text=f"ROUGE-L: {rouge_l:.2f}")
         self.sacrebleu_score_value.configure(text=f"sacreBLEU: {sacrebleu_score:.2f}")
 
-        print(f"F1 Score: {f1:.2f}, ROUGE-L: {rouge_l:.2f}, sacreBLEU: {sacrebleu_score:.2f}")  # Debugging statement
+        logger.info(f"F1 Score: {f1:.2f}, ROUGE-L: {rouge_l:.2f}, sacreBLEU: {sacrebleu_score:.2f}")
 
-        # Check if feedback is already provided
         cache_key = f"{self.username}:{self.quality_mode.get()}:{self.input_lang.get()}:{self.output_lang.get()}:{self.input_text.get('1.0', 'end').strip()}"
         if cache_key in self.cache and 'feedback' in self.cache[cache_key]:
-            self.feedback_label.grid_remove()
-            self.feedback_text.grid_remove()
-            self.submit_feedback_button.grid_remove()
-        else:
-            # Prompt for feedback if any score is below a threshold (e.g., 50)
-            if f1 < 50 or rouge_l < 50 or sacrebleu_score < 50:
-                print("Prompting for feedback...")  # Debugging statement
+            print("Add a feedback to improve the output if you wish.")
+        
+        if f1 < 50 or rouge_l < 50 or sacrebleu_score < 50:
+                logger.info("Prompting for feedback...")
                 self.prompt_for_feedback()
 
     def update_transcription_label(self, transcription):
-        """Update the transcription label."""
         self.transcription_label.configure(text=f"Transcription: {transcription}")
     
     def on_feedback_window_close(self):
-        """Handle the feedback window close event."""
         self.feedback_window.grab_release()
         self.feedback_window.destroy()
 
     def read_aloud_output(self):
-        """Read aloud the output text."""
         output_lang = self.output_lang.get()
         response_text = self.output_text.get("1.0", 'end').strip()
         if response_text:
-            Thread(target=text_to_speech, args=(response_text, output_lang)).start()
+            Thread(target=self.text_to_speech, args=(response_text, output_lang)).start()
+
 
     def display_report(self):
-        """Display the interaction report."""
         report = generate_report()
+        
         report_window = ctk.CTkToplevel(self)
         report_window.title("Interaction Report")
+        report_window.geometry("1200x800")  # Set higher resolution for the report window
         report_window.iconbitmap("icon.ico")
-        report_scrollbar = Scrollbar(report_window, width=10)
-        report_text = ctk.CTkTextbox(report_window, wrap='word', width=100, height=20, font=("Helvetica", 14), yscrollcommand=report_scrollbar.set)
-        report_text.pack(padx=10, pady=10)
-        report_scrollbar.pack(side='right', fill='y')
+        
+        report_frame = ctk.CTkFrame(report_window)
+        report_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        report_scrollbar = Scrollbar(report_frame, orient="vertical")
+        report_text = ctk.CTkTextbox(report_frame, wrap='word', font=("Helvetica", 14), yscrollcommand=report_scrollbar.set)
         report_scrollbar.config(command=report_text.yview)
-        report_text.insert('end', report.to_string())
+        
+        report_scrollbar.pack(side="right", fill="y")
+        report_text.pack(side="left", fill="both", expand=True)
+        
+        # Format the DataFrame as a string with improved appearance
+        report_string = report.to_string(index=False)
+        report_text.insert('end', report_string)
+
 
     def submit_feedback(self):
-        """Submit feedback for the generated response."""
         feedback = self.feedback_text.get("1.0", 'end').strip()
         feedback_details = {
             "relevance": self.relevance_var.get(),
@@ -1011,14 +1626,12 @@ class Application(ctk.CTk):
         with open("feedback_logs.json", "a") as log_file:
             log_file.write(json.dumps(log_data) + "\n")
 
-        # Update cache with feedback
         cache_key = f"{self.username}:{self.quality_mode.get()}:{self.input_lang.get()}:{self.output_lang.get()}:{self.input_text.get('1.0', 'end').strip()}"
         if cache_key in self.cache:
             self.cache[cache_key]['feedback'] = feedback_details
 
-        save_cache(self.cache)  # Save the updated cache
+        save_cache(self.cache)
 
-        # Log to MLflow
         with mlflow.start_run():
             mlflow.log_param("user", self.username)
             mlflow.log_param("feedback", feedback_details)
@@ -1027,71 +1640,30 @@ class Application(ctk.CTk):
         messagebox.showinfo("Success", "Feedback submitted successfully")
         self.feedback_text.delete("1.0", 'end')
 
-        # Re-generate response with the feedback
         user_input = self.input_text.get("1.0", 'end').strip()
         input_lang = self.input_lang.get()
         output_lang = self.output_lang.get()
         quality_mode = self.quality_mode.get()
         input_token_limit = self.validate_token_limit(self.input_token_limit.get())
         output_token_limit = self.validate_token_limit(self.output_token_limit.get())
-        print("Re-generating response with feedback...")  # Debugging statement
+        logger.info("Re-generating response with feedback...")
         Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit, feedback_details)).start()
 
     def prompt_for_feedback(self):
-        """Prompt the user for feedback."""
         response = messagebox.askyesno("Feedback Request", "The response quality seems low. Would you like to submit feedback?")
-        print("Prompt for feedback called.")  # Debugging statement
+        logger.info("Prompt for feedback called.")
         if response:
             self.feedback_label.grid()
             self.feedback_text.grid()
             self.submit_feedback_button.grid()
-            print("Opening feedback window...")  # Debugging statement
-            self.open_feedback_window()  # Ensure this method is called
+            logger.info("Opening feedback window...")
         else:
             self.feedback_label.grid_remove()
             self.feedback_text.grid_remove()
             self.submit_feedback_button.grid_remove()
 
 
-    def open_feedback_window(self):
-        """Open a new window for feedback submission."""
-        print("Feedback window method called.")  # Debugging statement
-        self.feedback_window = ctk.CTkToplevel(self)
-        self.feedback_window.title("Feedback")
-        self.feedback_window.geometry("400x400")
-        self.feedback_window.iconbitmap("icon.ico")
-
-        ctk.CTkLabel(self.feedback_window, text="Feedback Details:", font=("Helvetica", 14)).pack(pady=10)
-
-        ctk.CTkLabel(self.feedback_window, text="Relevance:", font=("Helvetica", 14)).pack(pady=5)
-        self.relevance_var = ctk.IntVar()
-        self.relevance_scale = ctk.CTkScale(self.feedback_window, from_=1, to=5, variable=self.relevance_var)
-        self.relevance_scale.pack(pady=5)
-
-        ctk.CTkLabel(self.feedback_window, text="Accuracy:", font=("Helvetica", 14)).pack(pady=5)
-        self.accuracy_var = ctk.IntVar()
-        self.accuracy_scale = ctk.CTkScale(self.feedback_window, from_=1, to=5, variable=self.accuracy_var)
-        self.accuracy_scale.pack(pady=5)
-
-        ctk.CTkLabel(self.feedback_window, text="Fluency:", font=("Helvetica", 14)).pack(pady=5)
-        self.fluency_var = ctk.IntVar()
-        self.fluency_scale = ctk.CTkScale(self.feedback_window, from_=1, to=5, variable=self.fluency_var)
-        self.fluency_scale.pack(pady=5)
-
-        ctk.CTkLabel(self.feedback_window, text="Additional Comments:", font=("Helvetica", 14)).pack(pady=5)
-        self.additional_comments_text = ctk.CTkTextbox(self.feedback_window, width=300, height=100, font=("Helvetica", 14))
-        self.additional_comments_text.pack(pady=5)
-
-        ctk.CTkButton(self.feedback_window, text="Submit Feedback", command=self.submit_feedback_from_window, font=("Helvetica", 14)).pack(pady=10)
-
-        self.feedback_window.protocol("WM_DELETE_WINDOW", self.on_feedback_window_close)
-        self.feedback_window.transient(self)
-        self.feedback_window.grab_set()
-        self.wait_window(self.feedback_window)
-
-
     def submit_feedback_from_window(self):
-        """Submit feedback from the new feedback window."""
         relevance = self.relevance_var.get()
         accuracy = self.accuracy_var.get()
         fluency = self.fluency_var.get()
@@ -1116,14 +1688,12 @@ class Application(ctk.CTk):
         with open("feedback_logs.json", "a") as log_file:
             log_file.write(json.dumps(log_data) + "\n")
 
-        # Update cache with feedback
         cache_key = f"{self.username}:{self.quality_mode.get()}:{self.input_lang.get()}:{self.output_lang.get()}:{self.input_text.get('1.0', 'end').strip()}"
         if cache_key in self.cache:
             self.cache[cache_key]['feedback'] = feedback_details
 
-        save_cache(self.cache)  # Save the updated cache
+        save_cache(self.cache)
 
-        # Log to MLflow
         with mlflow.start_run():
             mlflow.log_param("user", self.username)
             mlflow.log_param("feedback", feedback_details)
@@ -1132,7 +1702,6 @@ class Application(ctk.CTk):
         messagebox.showinfo("Success", "Feedback submitted successfully")
         self.feedback_window.destroy()
 
-        # Re-generate response with the feedback
         user_input = self.input_text.get("1.0", 'end').strip()
         input_lang = self.input_lang.get()
         output_lang = self.output_lang.get()
@@ -1141,30 +1710,169 @@ class Application(ctk.CTk):
         output_token_limit = self.validate_token_limit(self.output_token_limit.get())
         Thread(target=self.run_user_input_choice, args=(input_lang, output_lang, user_input, "text", cache_key, quality_mode, input_token_limit, output_token_limit, feedback_details)).start()
 
+    def show_user_info(self):
+        try:
+            response = requests.get('http://localhost:5005/user')
+            response.raise_for_status()
+            user_info = response.json()
+            messagebox.showinfo("User Info", f"Username: {user_info['username']}\nID: {user_info['id']}")
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror("Error", f"Failed to fetch user info: {e}")
+
+    def update_user_details(self):
+        new_username = simpledialog.askstring("Update Username", "Enter new username:")
+        new_password = simpledialog.askstring("Update Password", "Enter new password:", show='*')
+        data = {}
+        if new_username:
+            data['username'] = new_username
+        if new_password:
+            data['password'] = new_password
+        try:
+            response = requests.put('http://localhost:5005/user', json=data)
+            response.raise_for_status()
+            messagebox.showinfo("Success", "User details updated successfully")
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror("Error", f"Failed to update user details: {e}")
+
+    def delete_user(self):
+        response = messagebox.askyesno("Delete User", "Are you sure you want to delete your account?")
+        if response:
+            try:
+                response = requests.delete('http://localhost:5005/user')
+                response.raise_for_status()
+                messagebox.showinfo("Success", "User deleted successfully")
+                self.logout()
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror("Error", f"Failed to delete user: {e}")
+
+    def set_volume(self, volume_level):
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+        volume = int(volume_level) / 100
+        pygame.mixer.music.set_volume(volume)
+
+    def seek_audio(self, seek_position):
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+        pos = int(seek_position)
+        if pygame.mixer.music.get_busy():
+            total_length = pygame.mixer.Sound(self.audio_filename).get_length()
+            seek_time = (pos / 100) * total_length
+            pygame.mixer.music.play(start=seek_time)
+
+import logging
+
+def print_recent_logs():
+    with open('application.log', 'r') as log_file:
+        logs = log_file.readlines()
+        print("Recent Log Entries (last 10):")
+        for log in logs[-10:]:
+            print(log.strip())
+
+print_recent_logs()
+
+def print_performance_metrics():
+    interactions = generate_report()
+    if interactions.empty:
+        print("No interactions available.")
+        return
+
+    total_interactions = len(interactions)
+    unique_users = interactions['user'].nunique()
+    avg_response_time = interactions['timestamp'].diff().mean()
+
+    print(f"Total Interactions: {total_interactions}")
+    print(f"Unique Users: {unique_users}")
+    print(f"Average Response Time: {avg_response_time} seconds")
+
+print_performance_metrics()
+api_request_count = 0
+api_request_success = 0
+api_request_failure = 0
+
+def record_api_request(success=True):
+    global api_request_count, api_request_success, api_request_failure
+    api_request_count += 1
+    if success:
+        api_request_success += 1
+    else:
+        api_request_failure += 1
+
+def print_api_request_details():
+    print(f"Total API Requests: {api_request_count}")
+    print(f"Successful API Requests: {api_request_success}")
+    print(f"Failed API Requests: {api_request_failure}")
+
+print_api_request_details()
+def print_user_session_details():
+    if current_user and current_user.is_authenticated:
+        print(f"Current User: {current_user.username}")
+        print(f"User ID: {current_user.id}")
+        print(f"Authenticated: {current_user.is_authenticated}")
+    else:
+        print("No user is currently authenticated.")
+
+print_user_session_details()
+def print_cache_status():
+    cache_size = len(app.cache)
+    print(f"Cache Size: {cache_size} entries")
+    print("Cache Entries (first 5):")
+    for i, (key, value) in enumerate(app.cache.items()):
+        if i >= 5:
+            break
+        print(f"  Key: {key}")
+        print(f"  Value: {value}")
+
+print_cache_status()
+def print_collection_details():
+    collections = qdrant_client.get_collections().collections
+    print("Vector Database Collections:")
+    for collection in collections:
+        collection_info = qdrant_client.get_collection(collection.name)
+        print(f"Collection Name: {collection.name}")
+        print(f"  Number of Points: {collection_info.config.vectors.size}")
+        print(f"  Vector Size: {collection_info.config.vectors.size}")
+        print(f"  Distance: {collection_info.config.vectors.distance}")
+        print(f"  Status: {collection_info.status}")
+
+print_collection_details()
+
+
 if __name__ == "__main__":
+    # Start directory monitoring in a separate thread
+    monitor_thread = threading.Thread(target=monitor_directory, args=(PDF_DIRECTORY, OUTPUT_CSV_AR, OUTPUT_CSV_FR), daemon=True)
+    monitor_thread.start()
     def run_flask_app():
-        process_pdfs(PDF_DIRECTORY)
+        process_pdfs(config.pdf_directory)
         
-        # Check CSV content
         check_csv_content()
-        
-        # Ensure 'agriculture_ar' collection is created
+        logger.info("Processing PDFs and checking collections...")
+        process_pdfs(config.pdf_directory)
+        logger.info("Checking Arabic collection...")
         if not collection_exists("agriculture_ar"):
             try:
-                vectorize_and_store(OUTPUT_CSV_AR, "agriculture_ar")
+                vectorize_and_store(config.output_csv_ar, "agriculture_ar")
             except Exception as e:
-                print(f"Error creating 'agriculture_ar' collection: {e}")
-
-        # Ensure 'agriculture_fr' collection is created
+                logger.error(f"Error creating 'agriculture_ar' collection: {e}")
+        logger.info("Checking French collection...")
         if not collection_exists("agriculture_fr"):
             try:
-                vectorize_and_store(OUTPUT_CSV_FR, "agriculture_fr")
+                vectorize_and_store(config.output_csv_fr, "agriculture_fr")
             except Exception as e:
-                print(f"Error creating 'agriculture_fr' collection: {e}")
-                
-        flask_app.run(debug=False)
+                logger.error(f"Error creating 'agriculture_fr' collection: {e}")
+        logger.info("Starting Flask app...")      
+        flask_app.run(host="localhost", port=5005, debug=False)
+        # Call the function to print the system usage details
+        print_system_usage()
 
     Thread(target=run_flask_app).start()
 
     app = Application()
     app.mainloop()
+
+    print_system_usage()
+    print_collection_details()
+    print_cache_status()
+    print_user_session_details()
+    print_performance_metrics()
+    print_recent_logs()
