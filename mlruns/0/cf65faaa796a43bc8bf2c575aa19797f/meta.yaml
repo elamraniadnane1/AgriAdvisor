@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/cf65faaa796a43bc8bf2c575aa19797f/artifacts
+deleted_time: 1722196168328
 end_time: 1721419245665
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: cf65faaa796a43bc8bf2c575aa19797f
 run_name: incongruous-seal-569
 run_uuid: cf65faaa796a43bc8bf2c575aa19797f

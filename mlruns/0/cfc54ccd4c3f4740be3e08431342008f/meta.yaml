@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/cfc54ccd4c3f4740be3e08431342008f/artifacts
+deleted_time: 1722196168318
 end_time: 1721418458133
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: cfc54ccd4c3f4740be3e08431342008f
 run_name: magnificent-hog-639
 run_uuid: cfc54ccd4c3f4740be3e08431342008f

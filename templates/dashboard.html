@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .dashboard {
+            display: flex;
+            justify-content: space-around;
+        }
+        .card {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 10px;
+            border-radius: 5px;
+            width: 30%;
+        }
+        .card h2 {
+            margin-top: 0;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>Analytics Dashboard</h1>
+    <div class="dashboard">
+        <div class="card">
+            <h2>Common Queries</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Query</th>
+                            <th>Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for query, count in common_queries.items() %}
+                        <tr>
+                            <td>{{ query }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>User Statistics</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Interactions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user, count in user_stats.items() %}
+                        <tr>
+                            <td>{{ user }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Performance Metrics</h2>
+            <ul>
+                <li>Average Response Time: {{ performance_metrics.average_response_time }}</li>
+                <li>Total Interactions: {{ performance_metrics.total_interactions }}</li>
+                <li>Total Users: {{ performance_metrics.users_count }}</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

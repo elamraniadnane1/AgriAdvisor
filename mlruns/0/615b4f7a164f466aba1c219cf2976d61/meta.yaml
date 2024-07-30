@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/615b4f7a164f466aba1c219cf2976d61/artifacts
+deleted_time: 1722196168334
 end_time: 1721419561196
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 615b4f7a164f466aba1c219cf2976d61
 run_name: shivering-moose-194
 run_uuid: 615b4f7a164f466aba1c219cf2976d61

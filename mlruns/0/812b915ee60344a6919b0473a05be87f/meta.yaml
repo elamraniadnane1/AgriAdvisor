@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/812b915ee60344a6919b0473a05be87f/artifacts
+deleted_time: 1722196168305
 end_time: 1721421583680
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 812b915ee60344a6919b0473a05be87f
 run_name: blushing-lynx-715
 run_uuid: 812b915ee60344a6919b0473a05be87f

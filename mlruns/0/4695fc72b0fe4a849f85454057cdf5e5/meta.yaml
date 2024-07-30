@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/4695fc72b0fe4a849f85454057cdf5e5/artifacts
+deleted_time: 1722196168269
 end_time: 1721426622778
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 4695fc72b0fe4a849f85454057cdf5e5
 run_name: melodic-bird-176
 run_uuid: 4695fc72b0fe4a849f85454057cdf5e5

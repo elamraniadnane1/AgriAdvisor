@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/f367abb5e3a446a98cd7c202723978f1/artifacts
+deleted_time: 1722196168204
 end_time: 1721850229416
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: f367abb5e3a446a98cd7c202723978f1
 run_name: bemused-horse-273
 run_uuid: f367abb5e3a446a98cd7c202723978f1

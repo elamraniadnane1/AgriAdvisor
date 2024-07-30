@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/2c9b468201f2421592f19e6f82cf8b0e/artifacts
+deleted_time: 1722196168253
 end_time: 1721841051104
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 2c9b468201f2421592f19e6f82cf8b0e
 run_name: efficient-deer-907
 run_uuid: 2c9b468201f2421592f19e6f82cf8b0e

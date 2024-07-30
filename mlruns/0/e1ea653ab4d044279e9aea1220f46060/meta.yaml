@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/e1ea653ab4d044279e9aea1220f46060/artifacts
+deleted_time: 1722196168244
 end_time: 1721847119900
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: e1ea653ab4d044279e9aea1220f46060
 run_name: carefree-gull-186
 run_uuid: e1ea653ab4d044279e9aea1220f46060

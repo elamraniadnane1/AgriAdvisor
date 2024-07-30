@@ -1,0 +1,37 @@
+[
+    {
+        "timestamp": 1698573084.0,
+        "user": "Adnane",
+        "question": "What are the primary objectives of ONCA?",
+        "response": "ONCA's primary objectives are to foster public-private partnerships, organize the profession of private agricultural advisors at the national level within the context of contractual agreements, enhance the mobility of public advisors, and optimize the use of resources across its network.",
+        "collection_name": "agriculture_fr"
+    },
+    {
+        "timestamp": 1698573152.0,
+        "user": "Adnane",
+        "question": "How does ONCA support farmers?",
+        "response": "ONCA supports farmers through the newly established Centers of Agricultural Advice (CCA) which act as pivotal points for disseminating agricultural knowledge and best practices. These centers enable farmers to access various products and services related to agricultural advice.",
+        "collection_name": "agriculture_fr"
+    },
+    {
+        "timestamp": 1698573225.0,
+        "user": "Adnane",
+        "question": "Explain the role of ONCA in promoting sustainable agricultural development.",
+        "response": "ONCA promotes sustainable agricultural development by creating a continuous platform for institutional and professional partners to promote their offerings, disseminating critical managerial and technical messages, fostering a space for farmers to meet and exchange ideas, and promoting the efficient digitalization of agricultural advisory services.",
+        "collection_name": "agriculture_fr"
+    },
+    {
+        "timestamp": 1698573290.0,
+        "user": "Adnane",
+        "question": "What innovative communication methods does ONCA use?",
+        "response": "ONCA uses video storytelling and motion design to transfer tacit knowledge and share best agricultural practices, as well as podcasts to enrich existing radio broadcasts. These methods help disseminate agricultural knowledge effectively.",
+        "collection_name": "agriculture_fr"
+    },
+    {
+        "timestamp": 1698573357.0,
+        "user": "Adnane",
+        "question": "Describe the governance structure of ONCA.",
+        "response": "ONCA centralizes various local advisory entities, traditionally represented by 122 Centers of Agricultural Techniques (CT). These centers are now integrated into ONCA, with the oversight managed by ONCA at the national level and regional coordination by the Directions Régionales du Conseil Agricole (DRCA).",
+        "collection_name": "agriculture_fr"
+    }
+]

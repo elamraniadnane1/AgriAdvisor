@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/96052192d3a04b69b6e5397ec8ed0f66/artifacts
+deleted_time: 1722196168319
 end_time: 1721419640049
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 96052192d3a04b69b6e5397ec8ed0f66
 run_name: grandiose-pig-6
 run_uuid: 96052192d3a04b69b6e5397ec8ed0f66

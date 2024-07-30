@@ -1,8 +1,9 @@
 artifact_uri: mlflow-artifacts:/0/bfae3608a6304c1db57138a601190ef7/artifacts
+deleted_time: 1722196168249
 end_time: 1721847071934
 entry_point_name: ''
 experiment_id: '0'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: bfae3608a6304c1db57138a601190ef7
 run_name: able-fowl-162
 run_uuid: bfae3608a6304c1db57138a601190ef7
