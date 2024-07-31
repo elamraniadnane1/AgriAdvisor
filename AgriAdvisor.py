@@ -226,7 +226,10 @@ def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_
     save_cache(app.cache)
     app.after(0, app.update_output_text, response_text)
 
-
+# Initialize logging
+log_file = 'application.log'
+if not os.path.exists(log_file):
+    open(log_file, 'w').close()  # Create the log file if it does not exist
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -434,6 +437,7 @@ def get_user_info():
         'id': current_user.id,
         'authenticated' : True
     }
+    logger.info(f"User info: {user_info}")
     return jsonify(user_info), 200
 
 
@@ -525,7 +529,7 @@ def query():
     quality_mode = request.json.get('quality_mode', 'good')
     try:
         response_text = generate_response(question, collection_name)
-        #log_interaction(current_user.username, question, response_text, collection_name)
+        log_interaction(current_user.username, question, response_text, collection_name)
         logger.info(f"Generated response: {response_text}")
         return jsonify({'response': response_text}), 200
     except Exception as e:
@@ -840,7 +844,7 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
         response_text = response['choices'][0]['message']['content']
 
         #Log the interaction if the user is authenticated
-        #log_interaction(current_user.username, question, response_text, collection_name)
+        log_interaction(current_user.username, question, response_text, collection_name)
         
         return response_text
     except openai.error.OpenAIError as e:
@@ -1718,6 +1722,9 @@ class Application(ctk.CTk):
             messagebox.showinfo("User Info", f"Username: {user_info['username']}\nID: {user_info['id']}")
         except requests.exceptions.RequestException as e:
             messagebox.showerror("Error", f"Failed to fetch user info: {e}")
+        except json.JSONDecodeError as e:
+            messagebox.showerror("Error", f"Failed to decode JSON response: {e}")
+
 
     def update_user_details(self):
         new_username = simpledialog.askstring("Update Username", "Enter new username:")
@@ -1803,7 +1810,7 @@ def print_api_request_details():
     print(f"Successful API Requests: {api_request_success}")
     print(f"Failed API Requests: {api_request_failure}")
 
-print_api_request_details()
+
 def print_user_session_details():
     if current_user and current_user.is_authenticated:
         print(f"Current User: {current_user.username}")
@@ -1812,30 +1819,30 @@ def print_user_session_details():
     else:
         print("No user is currently authenticated.")
 
-print_user_session_details()
-def print_cache_status():
-    cache_size = len(app.cache)
-    print(f"Cache Size: {cache_size} entries")
-    print("Cache Entries (first 5):")
-    for i, (key, value) in enumerate(app.cache.items()):
-        if i >= 5:
-            break
-        print(f"  Key: {key}")
-        print(f"  Value: {value}")
 
-print_cache_status()
+def print_cache_status(app):
+    try:
+        cache_size = len(app.cache)
+        logger.info(f"Cache size: {cache_size} items")
+        print(f"Cache size: {cache_size} items")
+    except Exception as e:
+        logger.error(f"Error accessing cache: {e}")
+        
 def print_collection_details():
-    collections = qdrant_client.get_collections().collections
-    print("Vector Database Collections:")
-    for collection in collections:
-        collection_info = qdrant_client.get_collection(collection.name)
-        print(f"Collection Name: {collection.name}")
-        print(f"  Number of Points: {collection_info.config.vectors.size}")
-        print(f"  Vector Size: {collection_info.config.vectors.size}")
-        print(f"  Distance: {collection_info.config.vectors.distance}")
-        print(f"  Status: {collection_info.status}")
+    try:
+        collections = qdrant_client.get_collections().collections
+        for collection in collections:
+            collection_name = collection.name
+            collection_info = qdrant_client.get_collection(collection_name)
+            vector_size = collection_info.config.params.vector_size
+            distance = collection_info.config.params.distance
+            print(f"Collection: {collection_name}")
+            print(f"  Vector Size: {vector_size}")
+            print(f"  Distance: {distance}")
+            print(f"  Number of Points: {collection_info.status.point_count}")
+    except Exception as e:
+        logger.error(f"Error retrieving collection details: {e}")
 
-print_collection_details()
 
 
 if __name__ == "__main__":
@@ -1863,16 +1870,16 @@ if __name__ == "__main__":
         logger.info("Starting Flask app...")      
         flask_app.run(host="localhost", port=5005, debug=False)
         # Call the function to print the system usage details
-        print_system_usage()
 
     Thread(target=run_flask_app).start()
 
-    app = Application()
-    app.mainloop()
 
     print_system_usage()
     print_collection_details()
-    print_cache_status()
     print_user_session_details()
     print_performance_metrics()
     print_recent_logs()
+    app = Application()
+    print_cache_status(app)
+    app.mainloop()
+
