@@ -575,7 +575,7 @@ def query():
     quality_mode = request.json.get('quality_mode', 'good')
     try:
         response_text = generate_response(question, collection_name)
-        log_interaction(question, response_text, collection_name)
+        log_interaction(question, response_text, collection_name,current_user.username)
         logger.info(f"Generated response: {response_text}")
         return jsonify({'response': response_text}), 200
     except Exception as e:
@@ -890,7 +890,7 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
         response_text = response['choices'][0]['message']['content']
 
 
-        log_interaction(question, response_text, collection_name)
+        #log_interaction(question, response_text, collection_name,current_user.username)
         
         return response_text
     except openai.error.OpenAIError as e:
@@ -1070,6 +1070,8 @@ class Application(ctk.CTk):
         icon_photo = ImageTk.PhotoImage(icon_image)
         
         self.iconphoto(False, icon_photo)  # Set the new icon
+        
+        self.user_info = None  # Initialize user_info to None
 
         self.username = None
         self.user_info = {}
@@ -1140,7 +1142,6 @@ class Application(ctk.CTk):
         ctk.CTkButton(self.login_window, text="Login", command=self.login, font=("Helvetica", 14)).grid(row=4, column=0, columnspan=2, pady=10)
         ctk.CTkButton(self.login_window, text="Register", command=self.register, font=("Helvetica", 14)).grid(row=5, column=0, columnspan=2, pady=10)
     # In the Application class __init__ method
-    self.user_info = None  # Initialize user_info to None
     def login(self):
         username = self.username_entry.get()
         password = self.password_entry.get()
