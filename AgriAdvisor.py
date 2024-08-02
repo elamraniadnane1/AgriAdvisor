@@ -206,25 +206,32 @@ def monitor_directory(pdf_directory, output_csv_ar, output_csv_fr):
 
 
 def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
-    collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
+        print(f"Debug: user_info = {user_info}")
+        logger.info(f"Debug: user_info (type={type(user_info)}) = {user_info}")
+        # Check if user_info is valid and authenticated
+        if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
+            logger.error("User is not authenticated")
+            return "User is not authenticated. Please log in."
+        collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
 
-    if not collection_exists(collection_name):
-        response_text = f"The collection '{collection_name}' does not exist. Please ensure the data is processed and the collection is created."
-    else:
-        if input_type == "voice":
-            response_text = generate_response(user_input, collection_name, quality_mode, input_token_limit, output_token_limit, feedback)
-            if output_lang == "dar":
-                response_text = translate_to_darija(response_text)
-            elif input_lang != output_lang:
-                response_text = translate_text(response_text, output_lang)
+        if not collection_exists(collection_name):
+            response_text = f"The collection '{collection_name}' does not exist. Please ensure the data is processed and the collection is created."
         else:
-            response_text = user_input_choice(user_info, input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit, feedback)
+            if input_type == "voice":
+                response_text = generate_response(user_input, collection_name, quality_mode, input_token_limit, output_token_limit, feedback)
+                if output_lang == "dar":
+                    response_text = translate_to_darija(response_text)
+                elif input_lang != output_lang:
+                    response_text = translate_text(response_text, output_lang)
+            else:
+                response_text = user_input_choice(user_info, input_lang, output_lang, user_input, input_type, quality_mode, input_token_limit, output_token_limit, feedback)
 
-        if output_lang == "ar":
-            response_text = format_rtl_text(response_text)
-    app.cache[cache_key] = {'response': response_text, 'feedback': feedback}
-    save_cache(app.cache)
-    app.after(0, app.update_output_text, response_text)
+            if output_lang == "ar":
+                response_text = format_rtl_text(response_text)
+        app.cache[cache_key] = {'response': response_text, 'feedback': feedback}
+        save_cache(app.cache)
+        app.after(0, app.update_output_text, response_text)
+
 
 # Initialize logging
 log_file = 'application.log'
@@ -407,20 +414,59 @@ def dashboard():
     interactions = generate_report()
 
     if interactions.empty:
+        logger.error("No interactions available to generate the report.")
         return "No interactions available to generate the report.", 400
 
-    if 'question' not in interactions.columns or 'user' not in interactions.columns or 'timestamp' not in interactions.columns:
-        logger.error("Missing necessary columns in interactions data.")
+    required_columns = ['question', 'timestamp', 'user']
+    missing_columns = [col for col in required_columns if col not in interactions.columns]
+
+    if missing_columns:
+        logger.error(f"Missing necessary columns in interactions data: {missing_columns}")
         return "Insufficient data to generate the report.", 400
 
     common_queries = interactions['question'].value_counts().head(10).to_dict()
     user_stats = interactions['user'].value_counts().to_dict()
+
+    # Calculate performance metrics
+    average_response_time = interactions['timestamp'].diff().mean()
+    # Ensure average_response_time is in seconds
+    if isinstance(average_response_time, pd.Timedelta):
+        average_response_time = average_response_time.total_seconds()  # Convert to seconds
+    elif isinstance(average_response_time, np.float64):
+        average_response_time = float(average_response_time)  # Ensure it's a float
+
+    total_interactions = len(interactions)
+    unique_users = interactions['user'].nunique()
+    most_active_user = interactions['user'].value_counts().idxmax()
+    most_active_user_interactions = interactions['user'].value_counts().max()
+    least_active_user = interactions['user'].value_counts().idxmin()
+    least_active_user_interactions = interactions['user'].value_counts().min()
+    time_of_first_interaction = interactions['timestamp'].min()
+    time_of_last_interaction = interactions['timestamp'].max()
+    interaction_rate_per_user = total_interactions / unique_users if unique_users else 0
+    most_common_query = interactions['question'].value_counts().idxmax()
+    most_common_query_count = interactions['question'].value_counts().max()
+    total_unique_queries = interactions['question'].nunique()
+
     performance_metrics = {
-        'average_response_time': interactions['timestamp'].diff().mean(),
-        'total_interactions': len(interactions),
-        'users_count': interactions['user'].nunique(),
+        'average_response_time': average_response_time,
+        'total_interactions': total_interactions,
+        'unique_users': unique_users,
+        'most_active_user': most_active_user,
+        'most_active_user_interactions': most_active_user_interactions,
+        'least_active_user': least_active_user,
+        'least_active_user_interactions': least_active_user_interactions,
+        'time_of_first_interaction': time_of_first_interaction,
+        'time_of_last_interaction': time_of_last_interaction,
+        'interaction_rate_per_user': interaction_rate_per_user,
+        'most_common_query': most_common_query,
+        'most_common_query_count': most_common_query_count,
+        'total_unique_queries': total_unique_queries
     }
+
     return render_template('dashboard.html', common_queries=common_queries, user_stats=user_stats, performance_metrics=performance_metrics)
+
+
 
 
 from flask import session
@@ -505,7 +551,7 @@ def login():
                 if next_page:
                     return jsonify({'message': 'Login successful', 'redirect': next_page, 'user_info': user_info}), 200
                 else:
-                    return jsonify({'message': 'Login successful', 'user_info': user_info}), 200
+                    return jsonify({'message': 'Login successful', 'redirect': '/dashboard', 'user_info': user_info}), 200
         logger.error("Invalid credentials")
         return jsonify({'message': 'Invalid credentials'}), 401
     return render_template('login.html')  # Ensure you have a login.html template
@@ -529,7 +575,7 @@ def query():
     quality_mode = request.json.get('quality_mode', 'good')
     try:
         response_text = generate_response(question, collection_name)
-        log_interaction(current_user.username, question, response_text, collection_name)
+        log_interaction(question, response_text, collection_name)
         logger.info(f"Generated response: {response_text}")
         return jsonify({'response': response_text}), 200
     except Exception as e:
@@ -843,8 +889,8 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
 
         response_text = response['choices'][0]['message']['content']
 
-        #Log the interaction if the user is authenticated
-        log_interaction(current_user.username, question, response_text, collection_name)
+
+        log_interaction(question, response_text, collection_name)
         
         return response_text
     except openai.error.OpenAIError as e:
@@ -900,7 +946,8 @@ def print_system_usage():
 
 
 def user_input_choice(user_info, input_lang, output_lang, user_input, input_type="text", quality_mode="good", input_token_limit=800, output_token_limit=500, feedback=None):
-    if not user_info.get('authenticated', False):
+    logger.info(f"Debug: user_info in user_input_choice (type={type(user_info)}) = {user_info}")
+    if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
         logger.error("User is not authenticated")
         return "User is not authenticated. Please log in."
 
@@ -932,15 +979,14 @@ def user_input_choice(user_info, input_lang, output_lang, user_input, input_type
 def format_rtl_text(text):
     return f"\u202B{text}\u202C"
 
-def log_interaction(user, question, response, collection_name):
+def log_interaction(question, response, collection_name, user):
     log_data = {
         "timestamp": time.time(),
-        "user": user,
         "question": question,
         "response": response,
-        "collection_name": collection_name
+        "collection_name": collection_name,
+        "user": user
     }
-
     # Log interaction to JSON file
     log_file_path = "interaction_logs.json"
     
@@ -971,6 +1017,7 @@ def log_interaction(user, question, response, collection_name):
             mlflow.log_param("question", question)
             mlflow.log_param("response", response)
             mlflow.log_param("collection_name", collection_name)
+            mlflow.log_param("user", log_data["user"])
             mlflow.log_metric("timestamp", log_data["timestamp"])
         logger.info("Logged interaction to MLflow: %s", log_data)
     except Exception as e:
@@ -998,8 +1045,17 @@ def generate_report():
         logger.error(f"Unexpected error reading interaction logs: {e}")
 
     df = pd.DataFrame(interactions)
+    
+    # Ensure required columns are present
+    required_columns = ['question', 'timestamp', 'user']
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = None  # or handle as appropriate
+            logger.warning(f"Added missing column: {col}")
+
     logger.info(f"Generated report with {len(df)} interactions")
     return df
+
 
 class Application(ctk.CTk):
     def __init__(self):
@@ -1008,7 +1064,15 @@ class Application(ctk.CTk):
         self.geometry("1200x800")
         self.iconbitmap("icon.ico")
 
+        # Update this path to your new icon file
+        icon_path = "icon.ico"
+        icon_image = Image.open(icon_path)
+        icon_photo = ImageTk.PhotoImage(icon_image)
+        
+        self.iconphoto(False, icon_photo)  # Set the new icon
+
         self.username = None
+        self.user_info = {}
         self.recording = False
         self.frames = []
 
@@ -1075,7 +1139,8 @@ class Application(ctk.CTk):
 
         ctk.CTkButton(self.login_window, text="Login", command=self.login, font=("Helvetica", 14)).grid(row=4, column=0, columnspan=2, pady=10)
         ctk.CTkButton(self.login_window, text="Register", command=self.register, font=("Helvetica", 14)).grid(row=5, column=0, columnspan=2, pady=10)
-
+    # In the Application class __init__ method
+    self.user_info = None  # Initialize user_info to None
     def login(self):
         username = self.username_entry.get()
         password = self.password_entry.get()
@@ -1085,7 +1150,9 @@ class Application(ctk.CTk):
         if response.status_code == 200:
             response_data = response.json()
             self.username = username
-            self.user_info = response_data.get('user_info')
+            self.user_info = response_data.get('user_info', {})
+            if not self.user_info:
+                self.user_info = {}
             logger.info(f"user_info set to: {self.user_info}")
             self.user_info['authenticated'] = True
             self.language = self.language_combobox.get() 
@@ -1436,6 +1503,7 @@ class Application(ctk.CTk):
 
         # Check for user authentication
         user_info = self.user_info  # Use the stored user information
+        logger.info(f"process_input user_info: {user_info}")
         if user_info is None or not user_info.get('authenticated', False):
             messagebox.showerror("Error", "User is not authenticated. Please log in.")
             return
@@ -1449,6 +1517,8 @@ class Application(ctk.CTk):
             feedback = self.cache[cache_key].get('feedback', None)
             self.update_output_text(response_text, feedback)
         else:
+            # Add logging to ensure user_info is correctly passed
+            logger.info(f"Passing user_info to run_user_input_choice: {user_info}")
             # Process user input in a separate thread to keep UI responsive
             Thread(target=run_user_input_choice, args=(
                 user_info, 
@@ -1526,6 +1596,12 @@ class Application(ctk.CTk):
                 self.update_transcription_label("Could not request results from Google Speech Recognition service")
 
     def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
+        print(f"Debug: user_info = {user_info}")
+        logger.info(f"Debug: user_info (type={type(user_info)}) = {user_info}")
+        # Check if user_info is valid and authenticated
+        if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
+            logger.error("User is not authenticated")
+            return "User is not authenticated. Please log in."
         collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
 
         if not collection_exists(collection_name):
@@ -1785,11 +1861,9 @@ def print_performance_metrics():
         return
 
     total_interactions = len(interactions)
-    unique_users = interactions['user'].nunique()
     avg_response_time = interactions['timestamp'].diff().mean()
 
     print(f"Total Interactions: {total_interactions}")
-    print(f"Unique Users: {unique_users}")
     print(f"Average Response Time: {avg_response_time} seconds")
 
 print_performance_metrics()
@@ -1882,4 +1956,3 @@ if __name__ == "__main__":
     app = Application()
     print_cache_status(app)
     app.mainloop()
-

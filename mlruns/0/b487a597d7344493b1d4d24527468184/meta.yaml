@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/b487a597d7344493b1d4d24527468184/artifacts
+end_time: 1722561427521
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: b487a597d7344493b1d4d24527468184
+run_name: burly-shad-639
+run_uuid: b487a597d7344493b1d4d24527468184
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722561427388
+status: 3
+tags: []
+user_id: LENOVO

@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/d13429b562374932bd83bc727387a86f/artifacts
+end_time: 1722561457039
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: d13429b562374932bd83bc727387a86f
+run_name: enthused-lamb-217
+run_uuid: d13429b562374932bd83bc727387a86f
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722561456964
+status: 3
+tags: []
+user_id: LENOVO

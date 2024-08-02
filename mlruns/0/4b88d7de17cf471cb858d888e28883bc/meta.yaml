@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/4b88d7de17cf471cb858d888e28883bc/artifacts
+end_time: 1722542212227
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 4b88d7de17cf471cb858d888e28883bc
+run_name: skillful-auk-825
+run_uuid: 4b88d7de17cf471cb858d888e28883bc
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722542212077
+status: 3
+tags: []
+user_id: LENOVO

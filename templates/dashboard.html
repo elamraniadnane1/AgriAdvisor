@@ -8,23 +8,32 @@
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            background-color: #f9f9f9;
+            color: #333;
         }
         h1 {
             text-align: center;
+            color: #4CAF50;
         }
         .dashboard {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-around;
         }
         .card {
             border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             padding: 20px;
             margin: 10px;
             border-radius: 5px;
-            width: 30%;
+            background-color: #fff;
+            flex: 1;
+            min-width: 300px;
+            max-width: 45%;
         }
         .card h2 {
             margin-top: 0;
+            color: #333;
         }
         .table-container {
             overflow-x: auto;
@@ -32,6 +41,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 10px;
         }
         th, td {
             border: 1px solid #ddd;
@@ -40,6 +50,17 @@
         }
         th {
             background-color: #f4f4f4;
+            color: #333;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        ul li {
+            background: #e7f3e7;
+            margin: 5px 0;
+            padding: 10px;
+            border-left: 5px solid #4CAF50;
         }
     </style>
 </head>
@@ -91,9 +112,16 @@
         <div class="card">
             <h2>Performance Metrics</h2>
             <ul>
-                <li>Average Response Time: {{ performance_metrics.average_response_time }}</li>
+                <li>Average Response Time: {{ performance_metrics.average_response_time }} seconds</li>
                 <li>Total Interactions: {{ performance_metrics.total_interactions }}</li>
-                <li>Total Users: {{ performance_metrics.users_count }}</li>
+                <li>Unique Users: {{ performance_metrics.unique_users }}</li>
+                <li>Most Active User: {{ performance_metrics.most_active_user }} ({{ performance_metrics.most_active_user_interactions }} interactions)</li>
+                <li>Least Active User: {{ performance_metrics.least_active_user }} ({{ performance_metrics.least_active_user_interactions }} interactions)</li>
+                <li>Time of First Interaction: {{ performance_metrics.time_of_first_interaction }}</li>
+                <li>Time of Last Interaction: {{ performance_metrics.time_of_last_interaction }}</li>
+                <li>Interaction Rate Per User: {{ performance_metrics.interaction_rate_per_user }}</li>
+                <li>Most Common Query: {{ performance_metrics.most_common_query }} ({{ performance_metrics.most_common_query_count }} times)</li>
+                <li>Total Unique Queries: {{ performance_metrics.total_unique_queries }}</li>
             </ul>
         </div>
     </div>

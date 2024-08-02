@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/5d4ff717b9ba402d8da3ce721795eebd/artifacts
+end_time: 1722560601681
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 5d4ff717b9ba402d8da3ce721795eebd
+run_name: amusing-lark-147
+run_uuid: 5d4ff717b9ba402d8da3ce721795eebd
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722560601528
+status: 3
+tags: []
+user_id: LENOVO

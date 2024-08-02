@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/2402e869047444b799cb4966b1a63194/artifacts
+end_time: 1722460530012
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 2402e869047444b799cb4966b1a63194
+run_name: dazzling-shrimp-270
+run_uuid: 2402e869047444b799cb4966b1a63194
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722460529924
+status: 4
+tags: []
+user_id: LENOVO

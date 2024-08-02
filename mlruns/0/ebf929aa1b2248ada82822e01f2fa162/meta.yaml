@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/ebf929aa1b2248ada82822e01f2fa162/artifacts
+end_time: 1722564700820
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: ebf929aa1b2248ada82822e01f2fa162
+run_name: bright-cow-719
+run_uuid: ebf929aa1b2248ada82822e01f2fa162
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722564700663
+status: 3
+tags: []
+user_id: LENOVO

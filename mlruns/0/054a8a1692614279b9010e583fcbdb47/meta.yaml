@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/054a8a1692614279b9010e583fcbdb47/artifacts
+end_time: 1722559769390
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 054a8a1692614279b9010e583fcbdb47
+run_name: marvelous-squid-628
+run_uuid: 054a8a1692614279b9010e583fcbdb47
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722559768754
+status: 3
+tags: []
+user_id: LENOVO

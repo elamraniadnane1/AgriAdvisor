@@ -1,37 +1,54 @@
 [
     {
-        "timestamp": 1698573084.0,
-        "user": "Adnane",
-        "question": "What are the primary objectives of ONCA?",
-        "response": "ONCA's primary objectives are to foster public-private partnerships, organize the profession of private agricultural advisors at the national level within the context of contractual agreements, enhance the mobility of public advisors, and optimize the use of resources across its network.",
+        "timestamp": 1722525778.9097831,
+        "question": "How to plant tomatoes?",
+        "response": "Tomatoes should be planted in well-drained soil with plenty of sunlight.",
+        "collection_name": "agriculture_ar",
+        "user": "user1"
+    },
+    {
+        "timestamp": 1722525778.9097831,
+        "question": "Best fertilizers for wheat?",
+        "response": "Nitrogen-rich fertilizers are best for wheat.",
+        "collection_name": "agriculture_fr",
+        "user": "user2"
+    },
+    {
+        "timestamp": 1722525778.9097831,
+        "question": "How to control pests in rice fields?",
+        "response": "Integrated pest management practices are effective for controlling pests in rice fields.",
+        "collection_name": "agriculture_ar",
+        "user": "user1"
+    },
+    {
+        "timestamp": 1722525778.9097831,
+        "question": "Water requirements for corn?",
+        "response": "Corn requires about 1 inch of water per week during the growing season.",
+        "collection_name": "agriculture_fr",
+        "user": "user3"
+    },
+    {
+        "timestamp": 1722540094.5914793,
+        "question": "ONCA Def",
+        "response": "ONCA (Office National du Conseil Agricole) is a public entity established under the law 58-12 enacted by Dahir N°1.12.67 on January 16, 2013. Its creation was accompanied by a complete restructuring of the local agricultural advisory entities network, enhancing the mobility of public advisors and optimizing resources. Before its establishment, there were 122 CT (Technical Centers) which were integrated into this single public entity, ONCA.\n\nThe entity is tasked with steering and governing the agricultural advisory setup at the national level. Regionally, its coordination and animation task falls under the responsibility of DRCA (Regional Directorates of Agricultural Advisory) entities. Furthermore, new Agricultural Advisory Centers (CCA) have been established, functioning as vital points of communication for agricultural advice, transferring tacit knowledge and sharing good agricultural practices with farmers.\n\nONCA has set up various channels for this, with two storytelling videos in motion design that are shared on various platforms, such as the ARDNA platform, social networks, and TV channels. These videos feature the mascots of ONCA, with the first video focusing on the cereals sector and the second on the date palm sector. The ONCA has also enriched its \"radio broadcasts\" range by integrating agricultural podcasts.\n\nAs an organization dedicated to serving farmers, ONCA is structured around three main domains or departments:\n1. Agricultural Advisory Engineering Directorate: This Directorate is intended to coordinate and monitor the development of different annual regional action plans for agricultural advice, prepare national programs and budgets, and participate in the allocation of resources to different agricultural advisory actors.\n2. Operations Directorate \n3. Human Resources and Support Directorate \n\nOverall, ONCA plays a pivotal role in Moroccan agriculture, drastically altering the way agricultural advice was disseminated and accessed by farmers across the country.\n",
         "collection_name": "agriculture_fr"
     },
     {
-        "timestamp": 1698573152.0,
-        "user": "Adnane",
-        "question": "How does ONCA support farmers?",
-        "response": "ONCA supports farmers through the newly established Centers of Agricultural Advice (CCA) which act as pivotal points for disseminating agricultural knowledge and best practices. These centers enable farmers to access various products and services related to agricultural advice.",
+        "timestamp": 1722559922.476803,
+        "question": "ONCA??",
+        "response": "L'ONCA, qui signifie Office National du Conseil Agricole, est un établissement public marocain créé en vertu de la loi 58-12 promulguée par le Dahir N°1.12.67 du 4 Rabii I 1434 (16 Janvier 2013). Son objectif principal est de fournir un conseil agricole de qualité aux agriculteurs, de transférer des connaissances pertinentes et de promouvoir les bonnes pratiques agricoles. \n\nDans le cadre de ses missions, l'ONCA a mis en place une série d'initiatives et de services pour renforcer le partenariat public-privé, organiser le métier de conseiller agricole privé et le déployer à l'échelle nationale conformément à la loi 62-12. L'ONCA a également revu le réseau des entités locales de conseil agricole, absorbant les 122 Centres de Transfert de Technologie (CTT) au niveau d'un seul établissement public. \n\nA travers ses actions, l'ONCA vise à offrir des services diversifiés aux agriculteurs, aux partenaires institutionnels et aux professionnels du secteur agricole. Cela inclut la diffusion de vidéos en motion design mettant en scène les mascottes de l'ONCA pour sensibiliser sur des filières telles que les céréales et le palmier dattier, ainsi que la mise en place de podcasts agricoles pour informer et éduquer le grand public.\n\nEn s'orientant vers la digitalisation du conseil agricole, l'ONCA cherche à améliorer son efficacité et son efficience dans la transmission des connaissances et le partage des bonnes pratiques agricoles. Ces efforts visent à soutenir le développement durable de l'agriculture au Maroc.",
         "collection_name": "agriculture_fr"
     },
     {
-        "timestamp": 1698573225.0,
-        "user": "Adnane",
-        "question": "Explain the role of ONCA in promoting sustainable agricultural development.",
-        "response": "ONCA promotes sustainable agricultural development by creating a continuous platform for institutional and professional partners to promote their offerings, disseminating critical managerial and technical messages, fostering a space for farmers to meet and exchange ideas, and promoting the efficient digitalization of agricultural advisory services.",
+        "timestamp": 1722560574.064476,
+        "question": "Définir ONCA en arabe",
+        "response": "L'Office National du Conseil Agricole (ONCA) peut être défini en arabe comme \"المكتب الوطني للاستشارة الزراعية\".",
         "collection_name": "agriculture_fr"
     },
     {
-        "timestamp": 1698573290.0,
-        "user": "Adnane",
-        "question": "What innovative communication methods does ONCA use?",
-        "response": "ONCA uses video storytelling and motion design to transfer tacit knowledge and share best agricultural practices, as well as podcasts to enrich existing radio broadcasts. These methods help disseminate agricultural knowledge effectively.",
-        "collection_name": "agriculture_fr"
-    },
-    {
-        "timestamp": 1698573357.0,
-        "user": "Adnane",
-        "question": "Describe the governance structure of ONCA.",
-        "response": "ONCA centralizes various local advisory entities, traditionally represented by 122 Centers of Agricultural Techniques (CT). These centers are now integrated into ONCA, with the oversight managed by ONCA at the national level and regional coordination by the Directions Régionales du Conseil Agricole (DRCA).",
+        "timestamp": 1722561366.3679874,
+        "question": "Maladies du cerisier ?",
+        "response": "Les maladies du cerisier sont variées et peuvent affecter différents aspects de l'arbre, depuis les racines jusqu'aux fruits. Voici un aperçu des maladies courantes qui peuvent toucher les cerisiers :\n\n1. **Moniliose (Brunissure des fleurs et pourriture des fruits)** :\n   - **Symptômes**: Les fleurs brunissent et flétrissent, les fruits présentent des taches brunes puis pourrissent et momifient sur l'arbre. \n   - **Agents pathogènes**: Champignons _Monilinia laxa_ et _Monilinia fructigena_.\n   - **Lutte**: Élimination des fruits momifiés et des branches affectées, traitement fongicide en pré-floraison et post-floraison, amélioration de l’aération au sein de la canopée par une taille appropriée.\n\n2. **Coryneum (Criblure)** :\n   - **Symptômes**: Petites taches pourpres sur les feuilles qui se transforment en trous (criblures), taches sur les fruits et rameaux.\n   - **Agents pathogènes**: Champignon _Wilsonomyces carpophilus_.\n   - **Lutte**: Élimination des parties affectées de l’arbre, traitements fongicides au cuivre après la chute des feuilles et au printemps.\n\n3. **Oïdium** :\n   - **Symptômes**: Feutrage blanc sur les feuilles, les jeunes pousses et parfois les fruits. Les feuilles peuvent se déformer et tomber prématurément.\n   - **Agents pathogènes**: Champignon _Podosphaera clandestina_.\n   - **Lutte**: Application de soufre ou de fongicides spécifiques, amélioration de la circulation d’air et de la lumière au sein de l’arbre par une taille adéquate.\n\n4. **Bactériose (Chancre bactérien)** :\n   - **Symptômes**: Taches anguleuses sombres sur les feuilles entourées d'un halo jaune, chancres sur les branches et le tronc, suintement gommeux.\n   - **Agents pathogènes**: Bactéries _Pseudomonas syringae_.\n   - **Lutte**: Utilisation de variétés résistantes, élimination et destruction des parties infectées, traitement au cuivre en automne et en fin d’hiver.\n\n5. **Gommose** :\n   - **Symptômes**: Écoulement de gomme sur le tronc et les branches, souvent à la suite de blessures ou d'infections.\n   - **Causes**: Champignons, blessures mécaniques, stress hydrique ou excès d'humidité.\n   - **Lutte**: Protection des arbres contre les blessures, amélioration des conditions de culture (notamment le drainage), élagage des branches mortes ou malades.\n\nPour la prévention et la gestion des maladies du cerisier, il est crucial de :\n- **Assurer une bonne hygiène du verger** : éliminer régulièrement les fruits tombés et les débris végétaux.\n- **Adopter une taille adéquate** : pour améliorer la circulation de l’air et réduire l’humidité au sein de la canopée.\n- **Éviter les blessures sur les arbres** : qui peuvent servir de porte d'entrée aux agents pathogènes.\n- **Surveiller régulièrement** les arbres pour détecter précocement les signes de maladies et intervenir rapidement.\n\nLes brochures et les outils de conseil agricole développés, comme mentionné dans les informations fournies, peuvent fournir des détails supplémentaires et des conseils pratiques pour la gestion de ces maladies. Les agriculteurs sont encouragés à participer aux sessions de formation et à utiliser les différentes plateformes de communication pour obtenir des conseils et des informations à jour.",
         "collection_name": "agriculture_fr"
     }
 ]

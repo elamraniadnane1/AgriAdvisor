@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/d39b4e657f384f1fb5bcb7a760650c2b/artifacts
+end_time: 1722559924025
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: d39b4e657f384f1fb5bcb7a760650c2b
+run_name: amusing-bird-291
+run_uuid: d39b4e657f384f1fb5bcb7a760650c2b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722559923904
+status: 4
+tags: []
+user_id: LENOVO

@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/fdf173a548e54b669805520ca7743630/artifacts
+end_time: 1722559930163
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: fdf173a548e54b669805520ca7743630
+run_name: redolent-hog-10
+run_uuid: fdf173a548e54b669805520ca7743630
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722559930064
+status: 3
+tags: []
+user_id: LENOVO

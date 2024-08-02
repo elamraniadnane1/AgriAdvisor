@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/8c94ce411c5142b48f27ef4807ddf799/artifacts
+end_time: 1722460987047
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 8c94ce411c5142b48f27ef4807ddf799
+run_name: abrasive-cat-809
+run_uuid: 8c94ce411c5142b48f27ef4807ddf799
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722460986974
+status: 3
+tags: []
+user_id: LENOVO

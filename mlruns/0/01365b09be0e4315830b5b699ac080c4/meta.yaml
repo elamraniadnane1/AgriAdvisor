@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/01365b09be0e4315830b5b699ac080c4/artifacts
+end_time: 1722540097650
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 01365b09be0e4315830b5b699ac080c4
+run_name: awesome-ram-831
+run_uuid: 01365b09be0e4315830b5b699ac080c4
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722540097256
+status: 4
+tags: []
+user_id: LENOVO

@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/90b192251dd9446ea2c50a24297b3f93/artifacts
+end_time: 1722525314330
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 90b192251dd9446ea2c50a24297b3f93
+run_name: serious-toad-362
+run_uuid: 90b192251dd9446ea2c50a24297b3f93
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722525314252
+status: 3
+tags: []
+user_id: LENOVO

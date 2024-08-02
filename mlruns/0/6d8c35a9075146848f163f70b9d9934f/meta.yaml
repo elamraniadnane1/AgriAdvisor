@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/6d8c35a9075146848f163f70b9d9934f/artifacts
+end_time: 1722561366723
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 6d8c35a9075146848f163f70b9d9934f
+run_name: likeable-crab-614
+run_uuid: 6d8c35a9075146848f163f70b9d9934f
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722561366413
+status: 4
+tags: []
+user_id: LENOVO
