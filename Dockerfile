@@ -1,26 +1,24 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9-slim
+# Use the official Python image from the Docker Hub
+FROM python:3.9
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Copy the requirements file into the container
+COPY requirements.txt .
 
-# Install any needed packages specified in requirements.txt
+# Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the config.env file to the working directory
-COPY config.env /app
+# Copy the rest of the application code into the container
+COPY . .
 
-# Install dotenv to load environment variables
-RUN pip install python-dotenv
+# Copy the configuration files
+COPY config.py /app/config.py
+COPY config.env /app/config.env
 
-# Make port 5000 available to the world outside this container
+# Expose the port the app runs on
 EXPOSE 5000
 
-# Define environment variable
-ENV FLASK_APP=AgriAdvisor.py
-
-# Run the command to start the app
+# Run the application
 CMD ["python", "AgriAdvisor.py"]

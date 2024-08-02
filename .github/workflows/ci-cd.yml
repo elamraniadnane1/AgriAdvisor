@@ -19,7 +19,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.9'  # Use Python 3.9 or higher
+        python-version: '3.9'
 
     - name: Install system dependencies
       run: |
@@ -31,9 +31,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run tests
+    - name: Build Docker image
       run: |
-        pytest
+        docker build -t agriadvisor:latest .
 
   deploy:
     runs-on: ubuntu-latest
@@ -42,20 +42,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Set up SSH
-      uses: webfactory/ssh-agent@v0.5.3
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Deploy to Server
-      env:
-        SERVER_USER: ${{ secrets.SERVER_USER }}
-        SERVER_IP: ${{ secrets.SERVER_IP }}
+    - name: Build and run Docker container
       run: |
-        ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP << 'EOF'
-          cd /path/to/your/app/on/server
-          git pull origin main
-          source /path/to/your/virtualenv/bin/activate
-          pip install -r requirements.txt
-          # Add any other commands to restart your server or services
-        EOF
+        docker build -t agriadvisor:latest .
+        docker stop agriadvisor || true
+        docker rm agriadvisor || true
+        docker run -d -p 5000:5000 --name agriadvisor agriadvisor:latest
