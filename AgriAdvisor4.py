@@ -43,10 +43,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import Scale, HORIZONTAL  # Add this import for the Scale widget
 import webbrowser
 import psutil
-from langchain_community.document_loaders import DirectoryLoader
-from ragas.testset.generator import TestsetGenerator
-from ragas.testset.evolutions import simple, reasoning, multi_context
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 # Directory and output file paths
 PDF_DIRECTORY = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset"
@@ -58,44 +54,6 @@ class NewFileHandler(FileSystemEventHandler):
         self.pdf_directory = pdf_directory
         self.output_csv_ar = output_csv_ar
         self.output_csv_fr = output_csv_fr
-
-        # Load documents from the specified directory
-        loader = DirectoryLoader(pdf_directory)
-        all_documents = loader.load()
-
-        # Filter for PDF documents
-        self.documents = [doc for doc in all_documents if doc.metadata.get('source', '').endswith('.pdf')]
-
-        # Ensure each document has a filename in its metadata
-        for document in self.documents:
-            document.metadata['filename'] = document.metadata.get('source', 'unknown')
-
-        # Generate the synthetic test set
-        self.generate_synthetic_test_set()
-
-    
-    def generate_synthetic_test_set(self):
-        # Initialize models and embeddings
-        generator_llm = ChatOpenAI(model="gpt-3.5-turbo-16k")
-        critic_llm = ChatOpenAI(model="gpt-4")
-        embeddings = OpenAIEmbeddings()
-
-        # Create the test set generator
-        generator = TestsetGenerator.from_langchain(
-            generator_llm,
-            critic_llm,
-            embeddings
-        )
-
-        # Generate a synthetic test set with the specified distributions
-        testset = generator.generate_with_langchain_docs(
-            self.documents,
-            test_size=10,
-            distributions={simple: 0.5, reasoning: 0.25, multi_context: 0.25}
-        )
-        # Convert the test set to a Pandas DataFrame
-        self.testset_df = testset.to_pandas()
-        print(self.testset_df)  # Display the DataFrame for debugging
 
     def on_created(self, event):
         if event.is_directory:
@@ -617,7 +575,7 @@ def query():
     quality_mode = request.json.get('quality_mode', 'good')
     try:
         response_text = generate_response(question, collection_name)
-        log_interaction(question, response_text, collection_name,current_user.username)
+        #log_interaction(question, response_text, collection_name,current_user.username)
         logger.info(f"Generated response: {response_text}")
         return jsonify({'response': response_text}), 200
     except Exception as e:
@@ -909,13 +867,10 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
         truncated_question = truncate_text(question, input_token_limit)
         relevant_chunks = cached_query_qdrant(truncated_question, collection_name)
 
-        #prompt = (
-        #    "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
-        #    + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
-        #)
-        prompt = "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
-        for index, row in self.testset_df.iterrows():
-            prompt += f"- {row['context']}\n"
+        prompt = (
+            "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
+            + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
+        )
 
         if feedback:
             prompt += f"\n\nUser feedback:\n{feedback}"
@@ -1966,15 +1921,12 @@ def print_collection_details():
 
 
 if __name__ == "__main__":
-    # Initialize the file handler and generate synthetic test set
-    file_handler = NewFileHandler(PDF_DIRECTORY, OUTPUT_CSV_AR, OUTPUT_CSV_FR)
-    file_handler.generate_synthetic_test_set()
-    
     # Start directory monitoring in a separate thread
     monitor_thread = threading.Thread(target=monitor_directory, args=(PDF_DIRECTORY, OUTPUT_CSV_AR, OUTPUT_CSV_FR), daemon=True)
     monitor_thread.start()
     def run_flask_app():
         process_pdfs(config.pdf_directory)
+        
         check_csv_content()
         logger.info("Processing PDFs and checking collections...")
         process_pdfs(config.pdf_directory)
