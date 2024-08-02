@@ -45,6 +45,10 @@ jobs:
     - name: Build and run Docker container
       run: |
         docker build -t agriadvisor:latest .
-        docker stop agriadvisor || true
-        docker rm agriadvisor || true
+        if [ "$(docker ps -q -f name=agriadvisor)" ]; then
+          docker stop agriadvisor
+        fi
+        if [ "$(docker ps -aq -f status=exited -f name=agriadvisor)" ]; then
+          docker rm agriadvisor
+        fi
         docker run -d -p 5000:5000 --name agriadvisor agriadvisor:latest
