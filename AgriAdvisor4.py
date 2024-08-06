@@ -80,7 +80,7 @@ class NewFileHandler(FileSystemEventHandler):
             try:
                 logger.info(f"Attempting to retrieve embedding (Attempt {attempt + 1}/3) for content: {content[:30]}")
                 response = openai.Embedding.create(
-                    model="text-embedding-ada-002",
+                    model="text-embedding-3-large",
                     input=content
                 )
                 embedding = response['data'][0]['embedding']
@@ -208,10 +208,6 @@ def monitor_directory(pdf_directory, output_csv_ar, output_csv_fr):
 def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
         print(f"Debug: user_info = {user_info}")
         logger.info(f"Debug: user_info (type={type(user_info)}) = {user_info}")
-        # Check if user_info is valid and authenticated
-        if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
-            logger.error("User is not authenticated")
-            return "User is not authenticated. Please log in."
         collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
 
         if not collection_exists(collection_name):
@@ -674,7 +670,7 @@ def get_embedding(content):
     for _ in range(3):
         try:
             response = openai.Embedding.create(
-                model="text-embedding-ada-002",
+                model="text-embedding-3-large",
                 input=content
             )
             embedding = response['data'][0]['embedding']
@@ -947,9 +943,6 @@ def print_system_usage():
 
 def user_input_choice(user_info, input_lang, output_lang, user_input, input_type="text", quality_mode="good", input_token_limit=800, output_token_limit=500, feedback=None):
     logger.info(f"Debug: user_info in user_input_choice (type={type(user_info)}) = {user_info}")
-    if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
-        logger.error("User is not authenticated")
-        return "User is not authenticated. Please log in."
 
     if input_type == "voice":
         logger.info("Please speak into the microphone...")
@@ -1505,9 +1498,7 @@ class Application(ctk.CTk):
         # Check for user authentication
         user_info = self.user_info  # Use the stored user information
         logger.info(f"process_input user_info: {user_info}")
-        if user_info is None or not user_info.get('authenticated', False):
-            messagebox.showerror("Error", "User is not authenticated. Please log in.")
-            return
+    
 
         # Generate cache key
         cache_key = f"{self.username}:{quality_mode}:{input_lang}:{output_lang}:{user_input}"
@@ -1599,10 +1590,7 @@ class Application(ctk.CTk):
     def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
         print(f"Debug: user_info = {user_info}")
         logger.info(f"Debug: user_info (type={type(user_info)}) = {user_info}")
-        # Check if user_info is valid and authenticated
-        if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
-            logger.error("User is not authenticated")
-            return "User is not authenticated. Please log in."
+
         collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
 
         if not collection_exists(collection_name):

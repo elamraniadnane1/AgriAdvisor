@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/42e5a9b9be5140d0914cd62db73e372a/artifacts
+end_time: 1722888587592
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 42e5a9b9be5140d0914cd62db73e372a
+run_name: upset-fawn-639
+run_uuid: 42e5a9b9be5140d0914cd62db73e372a
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1722888587479
+status: 3
+tags: []
+user_id: LENOVO

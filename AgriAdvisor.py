@@ -122,7 +122,7 @@ class NewFileHandler(FileSystemEventHandler):
             try:
                 logger.info(f"Attempting to retrieve embedding (Attempt {attempt + 1}/3) for content: {content[:30]}")
                 response = openai.Embedding.create(
-                    model="text-embedding-ada-002",
+                    model="text-embedding-3-large",
                     input=content
                 )
                 embedding = response['data'][0]['embedding']
@@ -716,7 +716,7 @@ def get_embedding(content):
     for _ in range(3):
         try:
             response = openai.Embedding.create(
-                model="text-embedding-ada-002",
+                model="text-embedding-3-large",
                 input=content
             )
             embedding = response['data'][0]['embedding']
