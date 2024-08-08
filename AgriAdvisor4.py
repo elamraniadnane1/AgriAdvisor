@@ -1318,9 +1318,9 @@ class Application(ctk.CTk):
         self.input_label = ctk.CTkLabel(self.scrollable_frame, text="Input Text:", font=("Helvetica", 14))
         self.input_label.grid(row=0, column=0, pady=5, sticky='nsew')
 
-        self.input_scrollbar = Scrollbar(self.scrollable_frame, width=10)
+        self.input_scrollbar = Scrollbar(self.scrollable_frame, width=20)
         self.input_text = ctk.CTkTextbox(self.scrollable_frame, wrap='word', font=("Helvetica", 14), yscrollcommand=self.input_scrollbar.set)
-        self.input_text.grid(row=1, column=0, padx=5, pady=5, sticky='nsew')
+        self.input_text.grid(row=1, column=0, padx=10, pady=10, sticky='nsew')
         self.input_scrollbar.grid(row=1, column=1, sticky='nsew')
         self.input_scrollbar.config(command=self.input_text.yview)
 
@@ -1357,9 +1357,9 @@ class Application(ctk.CTk):
         self.output_label = ctk.CTkLabel(self.scrollable_frame, text="Output Text:", font=("Helvetica", 14))
         self.output_label.grid(row=0, column=2, pady=5, sticky='nsew')
 
-        self.output_scrollbar = Scrollbar(self.scrollable_frame, width=10)
+        self.output_scrollbar = Scrollbar(self.scrollable_frame, width=20)
         self.output_text = ctk.CTkTextbox(self.scrollable_frame, wrap='word', font=("Helvetica", 14), yscrollcommand=self.output_scrollbar.set)
-        self.output_text.grid(row=1, column=2, padx=5, pady=5, sticky='nsew')
+        self.output_text.grid(row=1, column=2, padx=10, pady=10, sticky='nsew')
         self.output_scrollbar.grid(row=1, column=3, sticky='nsew')
         self.output_scrollbar.config(command=self.output_text.yview)
 
