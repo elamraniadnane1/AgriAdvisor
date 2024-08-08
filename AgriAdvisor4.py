@@ -25,6 +25,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 import openai
 import mlflow
+import tkinter as tk 
 import customtkinter as ctk
 from tkinter import Scrollbar, messagebox, Canvas, Frame, Scale, HORIZONTAL
 from tkinter import simpledialog
