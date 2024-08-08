@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/91a97179d46e46f8955d61a8171840b2/artifacts
+end_time: 1723092325391
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 91a97179d46e46f8955d61a8171840b2
+run_name: unruly-turtle-816
+run_uuid: 91a97179d46e46f8955d61a8171840b2
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1723092325300
+status: 3
+tags: []
+user_id: LENOVO

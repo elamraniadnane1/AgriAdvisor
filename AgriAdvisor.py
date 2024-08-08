@@ -2,6 +2,8 @@ import os
 import uuid
 import hashlib
 import re
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 import time
 import json
 import threading
@@ -11,6 +13,10 @@ import os
 import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+import tkinter as tk
+from tkinter import filedialog
+import pygame
+import customtkinter as ctk
 import numpy as np
 import pandas as pd
 import fitz  # PyMuPDF
@@ -25,6 +31,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 import openai
 import mlflow
+import tkinter as tk 
 import customtkinter as ctk
 from tkinter import Scrollbar, messagebox, Canvas, Frame, Scale, HORIZONTAL
 from tkinter import simpledialog
@@ -43,10 +50,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import Scale, HORIZONTAL  # Add this import for the Scale widget
 import webbrowser
 import psutil
-from langchain_community.document_loaders import DirectoryLoader
-from ragas.testset.generator import TestsetGenerator
-from ragas.testset.evolutions import simple, reasoning, multi_context
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 # Directory and output file paths
 PDF_DIRECTORY = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset"
@@ -58,44 +61,6 @@ class NewFileHandler(FileSystemEventHandler):
         self.pdf_directory = pdf_directory
         self.output_csv_ar = output_csv_ar
         self.output_csv_fr = output_csv_fr
-
-        # Load documents from the specified directory
-        loader = DirectoryLoader(pdf_directory)
-        all_documents = loader.load()
-
-        # Filter for PDF documents
-        self.documents = [doc for doc in all_documents if doc.metadata.get('source', '').endswith('.pdf')]
-
-        # Ensure each document has a filename in its metadata
-        for document in self.documents:
-            document.metadata['filename'] = document.metadata.get('source', 'unknown')
-
-        # Generate the synthetic test set
-        self.generate_synthetic_test_set()
-
-    
-    def generate_synthetic_test_set(self):
-        # Initialize models and embeddings
-        generator_llm = ChatOpenAI(model="gpt-3.5-turbo-16k")
-        critic_llm = ChatOpenAI(model="gpt-4")
-        embeddings = OpenAIEmbeddings()
-
-        # Create the test set generator
-        generator = TestsetGenerator.from_langchain(
-            generator_llm,
-            critic_llm,
-            embeddings
-        )
-
-        # Generate a synthetic test set with the specified distributions
-        testset = generator.generate_with_langchain_docs(
-            self.documents,
-            test_size=10,
-            distributions={simple: 0.5, reasoning: 0.25, multi_context: 0.25}
-        )
-        # Convert the test set to a Pandas DataFrame
-        self.testset_df = testset.to_pandas()
-        print(self.testset_df)  # Display the DataFrame for debugging
 
     def on_created(self, event):
         if event.is_directory:
@@ -122,7 +87,7 @@ class NewFileHandler(FileSystemEventHandler):
             try:
                 logger.info(f"Attempting to retrieve embedding (Attempt {attempt + 1}/3) for content: {content[:30]}")
                 response = openai.Embedding.create(
-                    model="text-embedding-3-large",
+                    model="text-embedding-ada-002",
                     input=content
                 )
                 embedding = response['data'][0]['embedding']
@@ -250,10 +215,6 @@ def monitor_directory(pdf_directory, output_csv_ar, output_csv_fr):
 def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
         print(f"Debug: user_info = {user_info}")
         logger.info(f"Debug: user_info (type={type(user_info)}) = {user_info}")
-        # Check if user_info is valid and authenticated
-        if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
-            logger.error("User is not authenticated")
-            return "User is not authenticated. Please log in."
         collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
 
         if not collection_exists(collection_name):
@@ -617,7 +578,7 @@ def query():
     quality_mode = request.json.get('quality_mode', 'good')
     try:
         response_text = generate_response(question, collection_name)
-        log_interaction(question, response_text, collection_name,current_user.username)
+        #log_interaction(question, response_text, collection_name,current_user.username)
         logger.info(f"Generated response: {response_text}")
         return jsonify({'response': response_text}), 200
     except Exception as e:
@@ -716,7 +677,7 @@ def get_embedding(content):
     for _ in range(3):
         try:
             response = openai.Embedding.create(
-                model="text-embedding-3-large",
+                model="text-embedding-ada-002",
                 input=content
             )
             embedding = response['data'][0]['embedding']
@@ -909,13 +870,10 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
         truncated_question = truncate_text(question, input_token_limit)
         relevant_chunks = cached_query_qdrant(truncated_question, collection_name)
 
-        #prompt = (
-        #    "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
-        #    + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
-        #)
-        prompt = "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
-        for index, row in self.testset_df.iterrows():
-            prompt += f"- {row['context']}\n"
+        prompt = (
+            "You are an AI assistant specialized in agricultural advice. Here are some relevant information chunks:\n"
+            + "\n".join(f"- {chunk}" for chunk in relevant_chunks)
+        )
 
         if feedback:
             prompt += f"\n\nUser feedback:\n{feedback}"
@@ -992,9 +950,6 @@ def print_system_usage():
 
 def user_input_choice(user_info, input_lang, output_lang, user_input, input_type="text", quality_mode="good", input_token_limit=800, output_token_limit=500, feedback=None):
     logger.info(f"Debug: user_info in user_input_choice (type={type(user_info)}) = {user_info}")
-    if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
-        logger.error("User is not authenticated")
-        return "User is not authenticated. Please log in."
 
     if input_type == "voice":
         logger.info("Please speak into the microphone...")
@@ -1108,6 +1063,7 @@ class Application(ctk.CTk):
         self.title("AI AgriAdvisor")
         self.geometry("1200x800")
         self.iconbitmap("icon.ico")
+        self.audio_filename = None 
 
         # Update this path to your new icon file
         icon_path = "icon.ico"
@@ -1131,7 +1087,19 @@ class Application(ctk.CTk):
         self.show_login_window()
 
         self.cache = load_cache()
-
+    def create_widgets(self):
+        self.upload_button = ctk.CTkButton(self, text="Upload Audio", command=self.upload_audio)
+        self.upload_button.pack(pady=20)
+        
+        self.seek_button = ctk.CTkButton(self, text="Seek Audio", command=self.seek_audio)
+        self.seek_button.pack(pady=20)
+    def upload_audio(self):
+        self.audio_filename = filedialog.askopenfilename(title="Select Audio File", filetypes=[("Audio Files", "*.mp3 *.wav")])
+        if self.audio_filename:
+            pygame.mixer.init()
+            pygame.mixer.music.load(self.audio_filename)
+            pygame.mixer.music.play()
+    
     def update_true_text(self):
         new_true_text = simpledialog.askstring("Update True Text", "Enter new true text:")
         if new_true_text:
@@ -1369,9 +1337,9 @@ class Application(ctk.CTk):
         self.input_label = ctk.CTkLabel(self.scrollable_frame, text="Input Text:", font=("Helvetica", 14))
         self.input_label.grid(row=0, column=0, pady=5, sticky='nsew')
 
-        self.input_scrollbar = Scrollbar(self.scrollable_frame, width=10)
+        self.input_scrollbar = Scrollbar(self.scrollable_frame, width=20)
         self.input_text = ctk.CTkTextbox(self.scrollable_frame, wrap='word', font=("Helvetica", 14), yscrollcommand=self.input_scrollbar.set)
-        self.input_text.grid(row=1, column=0, padx=5, pady=5, sticky='nsew')
+        self.input_text.grid(row=1, column=0, padx=10, pady=10, sticky='nsew')
         self.input_scrollbar.grid(row=1, column=1, sticky='nsew')
         self.input_scrollbar.config(command=self.input_text.yview)
 
@@ -1408,9 +1376,9 @@ class Application(ctk.CTk):
         self.output_label = ctk.CTkLabel(self.scrollable_frame, text="Output Text:", font=("Helvetica", 14))
         self.output_label.grid(row=0, column=2, pady=5, sticky='nsew')
 
-        self.output_scrollbar = Scrollbar(self.scrollable_frame, width=10)
+        self.output_scrollbar = Scrollbar(self.scrollable_frame, width=20)
         self.output_text = ctk.CTkTextbox(self.scrollable_frame, wrap='word', font=("Helvetica", 14), yscrollcommand=self.output_scrollbar.set)
-        self.output_text.grid(row=1, column=2, padx=5, pady=5, sticky='nsew')
+        self.output_text.grid(row=1, column=2, padx=10, pady=10, sticky='nsew')
         self.output_scrollbar.grid(row=1, column=3, sticky='nsew')
         self.output_scrollbar.config(command=self.output_text.yview)
 
@@ -1550,9 +1518,7 @@ class Application(ctk.CTk):
         # Check for user authentication
         user_info = self.user_info  # Use the stored user information
         logger.info(f"process_input user_info: {user_info}")
-        if user_info is None or not user_info.get('authenticated', False):
-            messagebox.showerror("Error", "User is not authenticated. Please log in.")
-            return
+    
 
         # Generate cache key
         cache_key = f"{self.username}:{quality_mode}:{input_lang}:{output_lang}:{user_input}"
@@ -1644,10 +1610,7 @@ class Application(ctk.CTk):
     def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_type, cache_key, quality_mode, input_token_limit, output_token_limit, feedback=None):
         print(f"Debug: user_info = {user_info}")
         logger.info(f"Debug: user_info (type={type(user_info)}) = {user_info}")
-        # Check if user_info is valid and authenticated
-        if not isinstance(user_info, dict) or not user_info.get('authenticated', False):
-            logger.error("User is not authenticated")
-            return "User is not authenticated. Please log in."
+
         collection_name = "agriculture_ar" if input_lang == "ar" else "agriculture_fr"
 
         if not collection_exists(collection_name):
@@ -1880,15 +1843,12 @@ class Application(ctk.CTk):
         volume = int(volume_level) / 100
         pygame.mixer.music.set_volume(volume)
 
-    def seek_audio(self, seek_position):
-        if not pygame.mixer.get_init():
-            pygame.mixer.init()
-        pos = int(seek_position)
-        if pygame.mixer.music.get_busy():
+    def seek_audio(self):
+        if self.audio_filename:
             total_length = pygame.mixer.Sound(self.audio_filename).get_length()
-            seek_time = (pos / 100) * total_length
-            pygame.mixer.music.play(start=seek_time)
-
+            print(f"Total Length: {total_length}")
+        else:
+            print("No audio file selected.")
 import logging
 
 def print_recent_logs():
@@ -1966,15 +1926,12 @@ def print_collection_details():
 
 
 if __name__ == "__main__":
-    # Initialize the file handler and generate synthetic test set
-    file_handler = NewFileHandler(PDF_DIRECTORY, OUTPUT_CSV_AR, OUTPUT_CSV_FR)
-    file_handler.generate_synthetic_test_set()
-    
     # Start directory monitoring in a separate thread
     monitor_thread = threading.Thread(target=monitor_directory, args=(PDF_DIRECTORY, OUTPUT_CSV_AR, OUTPUT_CSV_FR), daemon=True)
     monitor_thread.start()
     def run_flask_app():
         process_pdfs(config.pdf_directory)
+        
         check_csv_content()
         logger.info("Processing PDFs and checking collections...")
         process_pdfs(config.pdf_directory)
