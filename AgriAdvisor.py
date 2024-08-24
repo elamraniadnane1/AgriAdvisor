@@ -847,25 +847,24 @@ def cached_query_qdrant(question, collection_name):
 def generate_response(question, collection_name, quality_mode="good", input_token_limit=2000, output_token_limit=2000, feedback=None):
 
     if current_user and current_user.is_authenticated:
-            logger.info(f"Current user: {current_user.username}, Authenticated: {current_user.is_authenticated}")
+        logger.info(f"Current user: {current_user.username}, Authenticated: {current_user.is_authenticated}")
     else:
-            logger.error("Current user is None")
-    
+        logger.error("Current user is None")
+
+    # Model and token settings
     model_mapping = {
         "premium": "gpt-4o",
         "good": "gpt-4",
         "economy": "gpt-3.5-turbo"
     }
-    
     model = model_mapping.get(quality_mode, "gpt-4")
     max_tokens_mapping = {
         "premium": 2000,
         "good": 500,
         "economy": 300
     }
-    
     max_tokens = max_tokens_mapping.get(quality_mode, 500)
-    
+
     try:
         truncated_question = truncate_text(question, input_token_limit)
         relevant_chunks = cached_query_qdrant(truncated_question, collection_name)
@@ -892,16 +891,27 @@ def generate_response(question, collection_name, quality_mode="good", input_toke
 
         response_text = response['choices'][0]['message']['content']
 
+        # Extract and print token usage
+        total_tokens = response['usage']['total_tokens']
+        prompt_tokens = response['usage']['prompt_tokens']
+        completion_tokens = response['usage']['completion_tokens']
 
-        #log_interaction(question, response_text, collection_name,current_user.username)
-        
+        logger.info(f"Total tokens used: {total_tokens}")
+        logger.info(f"Prompt tokens: {prompt_tokens}")
+        logger.info(f"Completion tokens: {completion_tokens}")
+        print(f"Total tokens used: {total_tokens}")
+        print(f"Prompt tokens: {prompt_tokens}")
+        print(f"Completion tokens: {completion_tokens}")
+
         return response_text
+
     except openai.error.OpenAIError as e:
         logger.error(f"OpenAI API error: {e}")
         return "An error occurred while generating the response."
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return "An unexpected error occurred while generating the response."
+
 
 
 def translate_text(text, target_language):
@@ -1382,12 +1392,6 @@ class Application(ctk.CTk):
         self.output_scrollbar.grid(row=1, column=3, sticky='nsew')
         self.output_scrollbar.config(command=self.output_text.yview)
 
-        self.f1_score_value = ctk.CTkLabel(self.scrollable_frame, text="F1 Score: N/A", font=("Helvetica", 14))
-        self.f1_score_value.grid(row=2, column=2, pady=5, sticky='nsew')
-        self.rouge_l_score_value = ctk.CTkLabel(self.scrollable_frame, text="ROUGE-L: N/A", font=("Helvetica", 14))
-        self.rouge_l_score_value.grid(row=3, column=2, pady=5, sticky='nsew')
-        self.sacrebleu_score_value = ctk.CTkLabel(self.scrollable_frame, text="sacreBLEU: N/A", font=("Helvetica", 14))
-        self.sacrebleu_score_value.grid(row=4, column=2, pady=5, sticky='nsew')
 
         self.record_button = ctk.CTkButton(self.scrollable_frame, text="Record", command=self.start_recording, font=("Helvetica", 14))
         self.record_button.grid(row=5, column=3, pady=5)

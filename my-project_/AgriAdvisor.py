@@ -723,12 +723,7 @@ class Application(ctk.CTk):
         self.output_scrollbar.grid(row=1, column=3, sticky='nsew')
         self.output_scrollbar.config(command=self.output_text.yview)
 
-        self.f1_score_value = ctk.CTkLabel(self, text="F1 Score: N/A", font=("Helvetica", 14))
-        self.f1_score_value.grid(row=2, column=2, pady=5, sticky='nsew')
-        self.rouge_l_score_value = ctk.CTkLabel(self, text="ROUGE-L: N/A", font=("Helvetica", 14))
-        self.rouge_l_score_value.grid(row=3, column=2, pady=5, sticky='nsew')
-        self.sacrebleu_score_value = ctk.CTkLabel(self, text="sacreBLEU: N/A", font=("Helvetica", 14))
-        self.sacrebleu_score_value.grid(row=4, column=2, pady=5, sticky='nsew')
+
 
         self.record_button = ctk.CTkButton(self, text="Record", command=self.start_recording, font=("Helvetica", 14))
         self.record_button.grid(row=5, column=1, pady=5)
