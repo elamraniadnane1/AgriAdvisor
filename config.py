@@ -11,7 +11,7 @@ class Config:
     output_csv_fr = os.getenv('OUTPUT_CSV_FR', r"C:\Users\LENOVO\OneDrive\Bureau\Dataset\agriculture_data_fr_.csv")
     
     # OpenAI API key
-    openai_api_key = os.getenv('OPENAI_API_KEY', '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')
+    openai_api_key = os.getenv('OPENAI_API_KEY', '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')
     
     # Qdrant client settings
     qdrant_host = os.getenv('QDRANT_HOST', 'localhost')

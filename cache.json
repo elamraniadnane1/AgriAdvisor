@@ -28,5 +28,17 @@
     "Adnane:premium:fr:fr:C'est quoi l'ONCA ?": {
         "response": "An error occurred while generating the response.",
         "feedback": ""
+    },
+    "Adnane:economy:fr:fr:Qui est Mohamed El Amrani": {
+        "response": "An error occurred while generating the response.",
+        "feedback": ""
+    },
+    "Adnane:economy:fr:fr:C'est qui Mohamed El Amrani": {
+        "response": "An error occurred while generating the response.",
+        "feedback": ""
+    },
+    "Adnane:premium:fr:fr:Qui est Mohamed El Amrani": {
+        "response": "Mohamed El Amrani est un enseignant-chercheur au Département d'Ingénierie du Développement à l'École Nationale d'Agriculture de Meknès depuis 1992. De formation initiale ingénieur agronome spécialisé en sciences de la vulgarisation, il a approfondi ses études doctorales dans le domaine de la sociologie et de l'économie rurale à la Faculté Universitaire des Sciences Agronomiques de Gembloux, Belgique, où il a soutenu sa thèse en 2001.\n\nSa thèse d'État porte sur l'évaluation de l'impact de la diffusion d'une innovation technique agricole sur les systèmes de production et sur la durabilité de l'agriculture, prenant comme cas d'étude la motopompe à eau dans la zone semi-aride de Sais au Maroc. Une thèse annexe aborde l'analyse conceptuelle de l'IFI, GED, et ASEG, et son application dans le contexte marocain, en soulignant la nécessité d'une nouvelle approche pour l'intégration des femmes rurales aux projets de développement.\n\nÀ l'École Nationale d'Agriculture de Meknès, il est responsable de plusieurs enseignements, notamment sur les méthodologies de conseil agricole, les processus d'innovation et de transfert des technologies, les politiques agricoles et rurales, et la gestion sociale et institutionnelle des ressources naturelles. Il a encadré une centaine de travaux de recherche.\n\nMohamed El Amrani a aussi contribué et supervisé divers projets de développement agricole et rural au Maroc, souvent en collaboration avec des organisations internationales et bailleurs de fonds. Il est membre de l'Association Internationale de Vulgarisation Agricole (AIAEE) et coordonnateur de la Revue Alternatives Rurales. Sa première édition méthodologique a été publiée en janvier 2017 par Marzak Impression à Meknès, Maroc.",
+        "feedback": ""
     }
 }
