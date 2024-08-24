@@ -80,6 +80,22 @@ To get started with the AgriAdvisor project, follow these steps:
 
 To start the Flask application and the PDF monitoring service:
 
+1. **Set up your environment:**
+   Install the necessary dependencies by running:
+
+2. **Configure environment variables:** Create a .env file in the root directory with the required environment variables, or export them directly in your terminal.
+
+3. **Start the Flask application:** Navigate to the project's root directory and run AgriAdvisor.py:
+
+This will start the Flask server. Access the application at http://localhost:5000.
+
+4. **Start the PDF monitoring service:** Run the monitoring service that processes new PDF files automatically:
+
+5. **Ensure the directory being monitored is correctly set in your configuration.**
+
+6. **Interacting with the application:** Use the web interface to upload PDF files, interact with AI models, and retrieve processed information.
+
+7. **Shutting down: To stop the Flask application and the monitoring service, press Ctrl+C in your terminal.**
 
 ## Project Structure
 
