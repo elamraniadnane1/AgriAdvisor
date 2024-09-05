@@ -52,9 +52,9 @@ import webbrowser
 import psutil
 
 # Directory and output file paths
-PDF_DIRECTORY = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset"
-OUTPUT_CSV_AR = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset\agriculture_data_ar_.csv"
-OUTPUT_CSV_FR = r"C:\Users\LENOVO\OneDrive\Bureau\Dataset\agriculture_data_fr_.csv"
+PDF_DIRECTORY = r"C:\Users\Dino\OneDrive\Bureau\Dataset"
+OUTPUT_CSV_AR = r"C:\Users\Dino\OneDrive\Bureau\agriculture_data_ar_.csv"
+OUTPUT_CSV_FR = r"C:\Users\Dino\OneDrive\Bureau\agriculture_data_fr_.csv"
 
 class NewFileHandler(FileSystemEventHandler):
     def __init__(self, pdf_directory, output_csv_ar, output_csv_fr):
@@ -234,6 +234,7 @@ def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_
         app.cache[cache_key] = {'response': response_text, 'feedback': feedback}
         save_cache(app.cache)
         app.after(0, app.update_output_text, response_text)
+
 
 
 # Initialize logging
