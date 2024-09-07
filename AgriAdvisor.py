@@ -1220,8 +1220,8 @@ class Application(ctk.CTk):
     def show_dashboard(self):
         webbrowser.open('http://localhost:5005/dashboard')
 
-
     def translate_to_arabic(self):
+        # Labels
         self.input_label.configure(text="نص المدخلات:")
         self.lang_label.configure(text="اختر لغة الإدخال:")
         self.output_lang_label.configure(text="اختر لغة الإخراج:")
@@ -1229,28 +1229,55 @@ class Application(ctk.CTk):
         self.input_token_label.configure(text="حد المدخلات:")
         self.output_token_label.configure(text="حد المخرجات:")
         self.output_label.configure(text="نص الإخراج:")
+
+        # Buttons
         self.submit_button.configure(text="إرسال")
         self.record_button.configure(text="تسجيل")
         self.stop_button.configure(text="إيقاف التسجيل")
-        self.speak_button.configure(text="قراءة الإخراج بصوت عال")
-        self.play_button.configure(text="▶ تشغيل")
-        self.pause_button.configure(text="⏸ إيقاف مؤقت")
-        self.replay_button.configure(text="⏪ إعادة التشغيل")
+        self.speak_button.configure(text="قراءة الإخراج بصوت عالٍ")
+        self.play_button.configure(text="تشغيل")
+        self.pause_button.configure(text="إيقاف مؤقت")
+        self.replay_button.configure(text="إعادة التشغيل")
         self.report_button.configure(text="توليد التقرير")
-        self.user_info_label.configure(text=f"مسجل الدخول: {self.username}")
         self.logout_button.configure(text="تسجيل الخروج")
-        self.recording_label.configure(text="تسجيل... يرجى التحدث في الميكروفون")
-        self.feedback_label.configure(text="ملاحظات (اختياري):")
+        self.help_button.configure(text="مساعدة")
+        self.dashboard_button.configure(text="لوحة التحكم")
+        self.show_user_info_button.configure(text="عرض معلومات المستخدم")
+        self.update_user_button.configure(text="تحديث المستخدم")
+        self.delete_user_button.configure(text="حذف المستخدم")
         self.submit_feedback_button.configure(text="إرسال الملاحظات")
+        self.update_true_text_button.configure(text="تحديث النص الأصلي")
+        self.theme_toggle_button.configure(text="تبديل السمة")
+
+        # Labels for User Info and Feedback
+        self.user_info_label.configure(text=f"مسجل الدخول: {self.username}")
+        self.feedback_label.configure(text="ملاحظات (اختياري):")
+
+        # Labels for Recording and Transcription
+        self.recording_label.configure(text="تسجيل... يرجى التحدث في الميكروفون")
+        self.transcription_label.configure(text="نسخ:")
+
+        # Volume Control and Seek Bar
+        self.volume_label.configure(text="التحكم في مستوى الصوت")
+        self.seek_label.configure(text="شريط البحث")
+
+        # Update the sliders and scrollbars
+        self.volume_slider.configure(label="مستوى الصوت")
+        self.seek_slider.configure(label="شريط البحث")
+
+    
 
     def translate_to_french(self):
+        # Labels
         self.input_label.configure(text="Texte d'entrée :")
         self.lang_label.configure(text="Sélectionnez la langue d'entrée :")
         self.output_lang_label.configure(text="Sélectionnez la langue de sortie :")
         self.quality_label.configure(text="Sélectionnez le mode de qualité :")
-        self.input_token_label.configure(text="Limite de tokens d'entrée :")
-        self.output_token_label.configure(text="Limite de tokens de sortie :")
+        self.input_token_label.configure(text="Limite des tokens d'entrée :")
+        self.output_token_label.configure(text="Limite des tokens de sortie :")
         self.output_label.configure(text="Texte de sortie :")
+
+        # Buttons
         self.submit_button.configure(text="Soumettre")
         self.record_button.configure(text="Enregistrer")
         self.stop_button.configure(text="Arrêter l'enregistrement")
@@ -1259,33 +1286,78 @@ class Application(ctk.CTk):
         self.pause_button.configure(text="⏸ Pause")
         self.replay_button.configure(text="⏪ Rejouer")
         self.report_button.configure(text="Générer le rapport")
-        self.user_info_label.configure(text=f"Connecté en tant que : {self.username}")
         self.logout_button.configure(text="Se déconnecter")
+        self.help_button.configure(text="Aide")
+        self.dashboard_button.configure(text="Tableau de bord")
+        self.show_user_info_button.configure(text="Afficher les infos utilisateur")
+        self.update_user_button.configure(text="Mettre à jour l'utilisateur")
+        self.delete_user_button.configure(text="Supprimer l'utilisateur")
+        self.submit_feedback_button.configure(text="Soumettre des commentaires")
+        self.update_true_text_button.configure(text="Mettre à jour le texte original")
+        self.theme_toggle_button.configure(text="Changer le thème")
+
+        # Labels for User Info and Feedback
+        self.user_info_label.configure(text=f"Connecté en tant que : {self.username}")
+        self.feedback_label.configure(text="Commentaires (facultatif) :")
+
+        # Labels for Recording and Transcription
         self.recording_label.configure(text="Enregistrement... Veuillez parler dans le microphone")
-        self.feedback_label.configure(text="Commentaires (Optionnel) :")
-        self.submit_feedback_button.configure(text="Soumettre les commentaires")
+        self.transcription_label.configure(text="Transcription :")
+
+        # Volume Control and Seek Bar
+        self.volume_label.configure(text="Contrôle du volume")
+        self.seek_label.configure(text="Barre de recherche")
+
+        # Update the sliders and scrollbars
+        self.volume_slider.configure(label="Volume")
+        self.seek_slider.configure(label="Barre de recherche")
+
 
     def translate_to_darija(self):
+        # Labels
         self.input_label.configure(text="النص المدخل:")
         self.lang_label.configure(text="اختار لغة الإدخال:")
         self.output_lang_label.configure(text="اختار لغة الإخراج:")
         self.quality_label.configure(text="اختار وضع الجودة:")
-        self.input_token_label.configure(text="حد المدخلات:")
-        self.output_token_label.configure(text="حد المخرجات:")
-        self.output_label.configure(text="النص الإخراج:")
+        self.input_token_label.configure(text="الحد الأقصى للكلمات المدخلة:")
+        self.output_token_label.configure(text="الحد الأقصى للكلمات المخرجة:")
+        self.output_label.configure(text="النص المخرّج:")
+
+        # Buttons
         self.submit_button.configure(text="إرسال")
         self.record_button.configure(text="تسجيل")
         self.stop_button.configure(text="إيقاف التسجيل")
-        self.speak_button.configure(text="قراءة الإخراج بصوت عالي")
-        self.play_button.configure(text="▶ تشغيل")
-        self.pause_button.configure(text="⏸ إيقاف مؤقت")
-        self.replay_button.configure(text="⏪ إعادة التشغيل")
-        self.report_button.configure(text="توليد التقرير")
-        self.user_info_label.configure(text=f"مسجل الدخول: {self.username}")
+        self.speak_button.configure(text="اقرأ النص بصوت عالي")
+        self.play_button.configure(text="تشغيل")
+        self.pause_button.configure(text="إيقاف مؤقت")
+        self.replay_button.configure(text="إعادة التشغيل")
+        self.report_button.configure(text="خرج تقرير")
         self.logout_button.configure(text="تسجيل الخروج")
-        self.recording_label.configure(text="تسجيل... المرجو التحدث في الميكروفون")
-        self.feedback_label.configure(text="ملاحظات (اختياري):")
+        self.help_button.configure(text="مساعدة")
+        self.dashboard_button.configure(text="لوحة التحكم")
+        self.show_user_info_button.configure(text="عرض معلومات المستخدم")
+        self.update_user_button.configure(text="تحديث المستخدم")
+        self.delete_user_button.configure(text="حذف المستخدم")
         self.submit_feedback_button.configure(text="إرسال الملاحظات")
+        self.update_true_text_button.configure(text="تحديث النص الأصلي")
+        self.theme_toggle_button.configure(text="تبديل السمة")
+
+        # Labels for User Info and Feedback
+        self.user_info_label.configure(text=f"مسجل الدخول: {self.username}")
+        self.feedback_label.configure(text="ملاحظات (اختياري):")
+
+        # Labels for Recording and Transcription
+        self.recording_label.configure(text="تسجيل... عفاك تهضر في الميكروفون")
+        self.transcription_label.configure(text="النسخ:")
+
+        # Volume Control and Seek Bar
+        self.volume_label.configure(text="التحكم في الصوت")
+        self.seek_label.configure(text="شريط البحث")
+
+        # Update the sliders and scrollbars
+        self.volume_slider.configure(label="مستوى الصوت")
+        self.seek_slider.configure(label="شريط البحث")
+
 
     def show_help(self):
         def open_docs():
