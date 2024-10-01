@@ -1,7 +1,9 @@
+# prometheus.yml
 global:
-  scrape_interval: 15s
+  scrape_interval: 15s  # Interval between metric scrapes
 
 scrape_configs:
-  - job_name: 'flask_app'
+  - job_name: 'flask-app'  # Name of your Flask app job
+    scrape_interval: 5s  # Scrape every 5 seconds
     static_configs:
-      - targets: ['localhost:5005']
+      - targets: ['localhost:5005']  # Address of your Flask app with the /metrics endpoint

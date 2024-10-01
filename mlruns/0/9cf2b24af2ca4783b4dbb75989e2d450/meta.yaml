@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/9cf2b24af2ca4783b4dbb75989e2d450/artifacts
+end_time: 1726417290806
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 9cf2b24af2ca4783b4dbb75989e2d450
+run_name: zealous-deer-59
+run_uuid: 9cf2b24af2ca4783b4dbb75989e2d450
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1726417290473
+status: 3
+tags: []
+user_id: Dino

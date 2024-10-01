@@ -11,6 +11,7 @@ import tempfile
 import wave
 import os
 import time
+import concurrent.futures
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import tkinter as tk
@@ -50,11 +51,26 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import Scale, HORIZONTAL  # Add this import for the Scale widget
 import webbrowser
 import psutil
+# Add the following imports at the top of your Flask app code
+from flask import send_file
+from io import BytesIO
+from werkzeug.utils import secure_filename
+
+
+
+# Ensure that typing_extensions is up to date
+try:
+    from typing_extensions import deprecated
+except ImportError as e:
+    logging.error(f"Required module 'deprecated' not found in 'typing_extensions'. Please update the 'typing_extensions' package.")
+    raise e
 
 # Directory and output file paths
 PDF_DIRECTORY = r"C:\Users\Dino\OneDrive\Bureau\Dataset"
 OUTPUT_CSV_AR = r"C:\Users\Dino\OneDrive\Bureau\agriculture_data_ar_.csv"
 OUTPUT_CSV_FR = r"C:\Users\Dino\OneDrive\Bureau\agriculture_data_fr_.csv"
+
+ # Create the log file if it does not exist
 
 class NewFileHandler(FileSystemEventHandler):
     def __init__(self, pdf_directory, output_csv_ar, output_csv_fr):
@@ -97,7 +113,18 @@ class NewFileHandler(FileSystemEventHandler):
                 logger.error(f"Error getting embedding: {e}")
                 time.sleep(2)
         return None
-    def chunk_text(self, text, max_tokens=4000):
+    
+    def chunk_text(text, max_tokens=800):
+        """
+        Splits the input text into chunks of words, ensuring each chunk does not exceed the max_tokens limit.
+
+        Args:
+            text (str): The input text to split.
+            max_tokens (int): Maximum number of tokens (words) per chunk.
+
+        Returns:
+            list: List of text chunks.
+        """
         words = text.split()
         chunks = []
         current_chunk = []
@@ -235,15 +262,40 @@ def run_user_input_choice(user_info, input_lang, output_lang, user_input, input_
         save_cache(app.cache)
         app.after(0, app.update_output_text, response_text)
 
+from functools import wraps
+
+def handle_exceptions(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error in {func.__name__}: {e}", exc_info=True)
+            return None
+    return wrapper
+
+# Example usage
+@handle_exceptions
+def get_embedding(content):
+    response = openai.Embedding.create(
+        model="text-embedding-ada-002",
+        input=content
+    )
+    return response['data'][0]['embedding']
 
 
-# Initialize logging
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Initialize logging with rotation (max 5 MB per file, keeping the last 3 files)
 log_file = 'application.log'
-if not os.path.exists(log_file):
-    open(log_file, 'w').close()  # Create the log file if it does not exist
-
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+handler = RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=3)
+logging.basicConfig(
+    handlers=[handler],
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # Load configuration
@@ -262,6 +314,9 @@ login_manager = LoginManager()
 login_manager.init_app(flask_app)
 metrics = PrometheusMetrics(flask_app)
 login_manager.login_view = 'login'
+
+
+
 
 # In-memory user store
 users = {}
@@ -324,11 +379,16 @@ def show_dashboard(self):
 
 
 class User(UserMixin):
-    def __init__(self, id, username, password,authenticated=False):
+    
+    def __init__(self, id, username, password, email='', phone='', authenticated=False, is_admin=False, favorites=None):
         self.id = id
         self.username = username
         self.password = password
+        self.email = email
+        self.phone = phone
         self.authenticated = authenticated
+        self.is_admin = is_admin
+        self.favorites = favorites if favorites is not None else []
 
     @property
     def is_authenticated(self):
@@ -348,17 +408,36 @@ def load_users():
                 try:
                     user_data = json.loads(content)
                     for user_id, data in user_data.items():
-                        users[user_id] = User(user_id, data['username'], data['password'])
+                        users[user_id] = User(
+                            id=user_id,
+                            username=data['username'],
+                            password=data['password'],
+                            email=data.get('email', ''),
+                            phone=data.get('phone', ''),
+                            is_admin=data.get('is_admin', False),
+                            favorites=data.get('favorites', [])
+                        )
                 except json.JSONDecodeError as e:
                     logger.error(f"Error decoding JSON file {USERS_FILE}: {e}")
             else:
                 logger.warning(f"{USERS_FILE} is empty.")
     else:
         logger.warning(f"{USERS_FILE} does not exist.")
+        
 load_users()
 def save_users():
     with open(USERS_FILE, 'w', encoding='utf-8') as file:
-        json.dump({user_id: {'username': user.username, 'password': user.password} for user_id, user in users.items()}, file, ensure_ascii=False, indent=4)
+        user_data = {
+            user_id: {
+                'username': user.username,
+                'password': user.password,
+                'email': user.email,
+                'phone': user.phone,
+                'is_admin': user.is_admin,
+                'favorites': user.favorites
+            } for user_id, user in users.items()
+        }
+        json.dump(user_data, file, ensure_ascii=False, indent=4)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -402,6 +481,231 @@ def update_password():
 def get_all_users():
     # Implement logic to fetch and return all users for admin
     return jsonify({'users': 'List of all users'}), 200
+
+@flask_app.route('/user/interactions', methods=['GET'])
+@login_required
+def get_user_interactions():
+    try:
+        user_id = current_user.id
+        interactions = []
+        if os.path.exists("interaction_logs.json"):
+            with open("interaction_logs.json", "r", encoding='utf-8') as log_file:
+                data = json.load(log_file)
+                # Filter interactions for the current user
+                interactions = [interaction for interaction in data if interaction.get('user_id') == user_id]
+        return jsonify({'interactions': interactions}), 200
+    except Exception as e:
+        logger.error(f"Error retrieving user interactions: {e}")
+        return jsonify({'error': 'Failed to retrieve interactions'}), 500
+
+
+@flask_app.route('/user/interactions/<interaction_id>', methods=['DELETE'])
+@login_required
+def delete_interaction(interaction_id):
+    try:
+        user_id = current_user.id
+        if os.path.exists("interaction_logs.json"):
+            with open("interaction_logs.json", "r+", encoding='utf-8') as log_file:
+                data = json.load(log_file)
+                # Find and remove the interaction
+                data = [interaction for interaction in data if not (
+                    interaction.get('interaction_id') == interaction_id and interaction.get('user_id') == user_id)]
+                log_file.seek(0)
+                log_file.truncate()
+                json.dump(data, log_file, ensure_ascii=False, indent=4)
+            return jsonify({'message': 'Interaction deleted successfully'}), 200
+        else:
+            return jsonify({'error': 'No interactions found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting interaction: {e}")
+        return jsonify({'error': 'Failed to delete interaction'}), 500
+@flask_app.route('/user/profile', methods=['PUT'])
+@login_required
+def update_profile():
+    data = request.json
+    email = data.get('email')
+    phone = data.get('phone')
+    if email:
+        current_user.email = email
+    if phone:
+        current_user.phone = phone
+    save_users()
+    return jsonify({'message': 'Profile updated successfully'}), 200
+
+@flask_app.route('/admin/collections/<collection_name>', methods=['DELETE'])
+@login_required
+def delete_collection(collection_name):
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Admin privileges required'}), 403
+    try:
+        if not collection_exists(collection_name):
+            return jsonify({'error': f"Collection '{collection_name}' does not exist"}), 404
+        qdrant_client.delete_collection(collection_name)
+        logger.info(f"Collection '{collection_name}' deleted by admin '{current_user.username}'")
+        return jsonify({'message': f"Collection '{collection_name}' deleted successfully"}), 200
+    except Exception as e:
+        logger.error(f"Error deleting collection '{collection_name}': {e}")
+        return jsonify({'error': 'Failed to delete collection'}), 500
+
+
+@flask_app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({'status': 'OK'}), 200
+@flask_app.route('/metrics', methods=['GET'])
+@login_required
+def metrics_route():
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Admin privileges required'}), 403
+    return Response(prometheus_client.generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+@flask_app.route('/rate_response', methods=['POST'])
+@login_required
+def rate_response():
+    data = request.json
+    interaction_id = data.get('interaction_id')
+    rating = data.get('rating')  # Expecting a value between 1 and 5
+    if not interaction_id or not rating:
+        return jsonify({'error': 'Interaction ID and rating are required'}), 400
+    try:
+        # Update the interaction log with the rating
+        if os.path.exists("interaction_logs.json"):
+            with open("interaction_logs.json", "r+", encoding='utf-8') as log_file:
+                interactions = json.load(log_file)
+                for interaction in interactions:
+                    if interaction.get('interaction_id') == interaction_id and interaction.get('user_id') == current_user.id:
+                        interaction['rating'] = rating
+                        break
+                else:
+                    return jsonify({'error': 'Interaction not found'}), 404
+                log_file.seek(0)
+                log_file.truncate()
+                json.dump(interactions, log_file, ensure_ascii=False, indent=4)
+            return jsonify({'message': 'Rating submitted successfully'}), 200
+        else:
+            return jsonify({'error': 'No interactions found'}), 404
+    except Exception as e:
+        logger.error(f"Error submitting rating: {e}")
+        return jsonify({'error': 'Failed to submit rating'}), 500
+# Save a favorite response
+@flask_app.route('/favorites', methods=['POST'])
+@login_required
+def save_favorite():
+    data = request.json
+    interaction_id = data.get('interaction_id')
+    if not interaction_id:
+        return jsonify({'error': 'Interaction ID is required'}), 400
+    try:
+        # Save the interaction ID to the user's favorites
+        if not hasattr(current_user, 'favorites'):
+            current_user.favorites = []
+        current_user.favorites.append(interaction_id)
+        save_users()
+        return jsonify({'message': 'Response saved to favorites'}), 201
+    except Exception as e:
+        logger.error(f"Error saving favorite: {e}")
+        return jsonify({'error': 'Failed to save favorite'}), 500
+
+# Retrieve favorite responses
+@flask_app.route('/favorites', methods=['GET'])
+@login_required
+def get_favorites():
+    try:
+        if not hasattr(current_user, 'favorites'):
+            return jsonify({'favorites': []}), 200
+        interactions = []
+        if os.path.exists("interaction_logs.json"):
+            with open("interaction_logs.json", "r", encoding='utf-8') as log_file:
+                data = json.load(log_file)
+                interactions = [interaction for interaction in data if interaction.get('interaction_id') in current_user.favorites]
+        return jsonify({'favorites': interactions}), 200
+    except Exception as e:
+        logger.error(f"Error retrieving favorites: {e}")
+        return jsonify({'error': 'Failed to retrieve favorites'}), 500
+
+@flask_app.route('/upload_pdf', methods=['POST'])
+@login_required
+def upload_pdf():
+    if 'pdf_file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['pdf_file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    if file and file.filename.lower().endswith('.pdf'):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(PDF_DIRECTORY, filename)
+        file.save(file_path)
+        logger.info(f"User {current_user.username} uploaded file {filename}")
+        return jsonify({'message': 'File uploaded successfully'}), 201
+    else:
+        return jsonify({'error': 'Invalid file type'}), 400
+
+@flask_app.route('/collections', methods=['GET'])
+@login_required
+def list_collections():
+    try:
+        collections = qdrant_client.get_collections().collections
+        collection_names = [col.name for col in collections]
+        return jsonify({'collections': collection_names}), 200
+    except Exception as e:
+        logger.error(f"Error retrieving collections: {e}")
+        return jsonify({'error': 'Failed to retrieve collections'}), 500
+
+@flask_app.route('/collections/<collection_name>/stats', methods=['GET'])
+@login_required
+def collection_stats(collection_name):
+    try:
+        if not collection_exists(collection_name):
+            return jsonify({'error': f"Collection '{collection_name}' does not exist"}), 404
+        collection_info = qdrant_client.get_collection(collection_name)
+        stats = {
+            'vector_size': collection_info.config.params.vector_size,
+            'distance': collection_info.config.params.distance,
+            'point_count': collection_info.status.point_count,
+            'indexed_vector_count': collection_info.status.indexed_vectors_count,
+        }
+        return jsonify({'collection_name': collection_name, 'stats': stats}), 200
+    except Exception as e:
+        logger.error(f"Error retrieving stats for collection {collection_name}: {e}")
+        return jsonify({'error': 'Failed to retrieve collection stats'}), 500
+
+@flask_app.route('/interactions', methods=['GET'])
+@login_required
+def download_interactions():
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Admin privileges required'}), 403
+    try:
+        if not os.path.exists('interaction_logs.json'):
+            return jsonify({'error': 'No interaction logs found'}), 404
+        return send_file('interaction_logs.json', as_attachment=True)
+    except Exception as e:
+        logger.error(f"Error sending interaction logs: {e}")
+        return jsonify({'error': 'Failed to send interaction logs'}), 500
+
+@flask_app.route('/feedbacks', methods=['GET'])
+@login_required
+def get_feedbacks():
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Admin privileges required'}), 403
+    try:
+        if not os.path.exists('feedback_logs.json'):
+            return jsonify({'error': 'No feedback logs found'}), 404
+        with open('feedback_logs.json', 'r', encoding='utf-8') as f:
+            feedbacks = [json.loads(line) for line in f]
+        return jsonify({'feedbacks': feedbacks}), 200
+    except Exception as e:
+        logger.error(f"Error retrieving feedbacks: {e}")
+        return jsonify({'error': 'Failed to retrieve feedbacks'}), 500
+
+@flask_app.route('/reset_password', methods=['POST'])
+def reset_password():
+    username = request.json.get('username')
+    if not username:
+        return jsonify({'error': 'Username is required'}), 400
+    if username not in [user.username for user in users.values()]:
+        return jsonify({'error': 'User not found'}), 404
+    # Implement password reset logic here (e.g., send an email with a reset token)
+    # For simplicity, we'll assume the reset is successful
+    logger.info(f"Password reset requested for user: {username}")
+    return jsonify({'message': 'Password reset instructions have been sent'}), 200
 
 @flask_app.route('/admin/user/<user_id>', methods=['DELETE'])
 @login_required
@@ -677,17 +981,40 @@ def chunk_text(text, max_tokens=800):
 def get_embedding(content):
     for _ in range(3):
         try:
+            # Use a timeout to handle slow API responses
             response = openai.Embedding.create(
                 model="text-embedding-ada-002",
-                input=content
+                input=content,
+                timeout=5  # Timeout after 5 seconds
             )
             embedding = response['data'][0]['embedding']
             logger.info(f"Successfully retrieved embedding for content: {content[:30]}")
             return embedding
+        except openai.error.Timeout as e:
+            logger.error(f"Request timed out: {e}")
+            return None
+        except openai.error.OpenAIError as e:
+            logger.error(f"OpenAI API error: {e}")
         except Exception as e:
-            logger.error(f"Error getting embedding: {e}")
-            time.sleep(2)
+            logger.error(f"Unexpected error: {e}")
+        time.sleep(2)
     return None
+
+# Add concurrent processing to API calls
+def process_pdfs_concurrently(pdf_directory):
+    pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith(".pdf")]
+    
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(extract_text_from_pdf, os.path.join(pdf_directory, pdf)): pdf for pdf in pdf_files}
+        for future in concurrent.futures.as_completed(futures):
+            pdf = futures[future]
+            try:
+                text = future.result()
+                # Process the text here (e.g., language detection, translation)
+                logger.info(f"Processed text for {pdf}")
+            except Exception as exc:
+                logger.error(f"Error processing {pdf}: {exc}")
+
 
 def collection_exists(collection_name):
     collections = qdrant_client.get_collections().collections

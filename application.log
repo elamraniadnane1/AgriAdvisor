@@ -1,0 +1,131 @@
+2024-09-26 20:46:28 - INFO - Arabic CSV contains 23 records.
+2024-09-26 20:46:28 - INFO - French CSV contains 5 records.
+2024-09-26 20:46:28 - INFO - Generated report with 8 interactions
+2024-09-26 20:46:30 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 20:46:31 - INFO - HTTP Request: GET http://localhost:6333/collections/agriculture_ar "HTTP/1.1 200 OK"
+2024-09-26 20:46:31 - ERROR - Error retrieving collection details: 'CollectionParams' object has no attribute 'vector_size'
+2024-09-26 20:46:31 - INFO - Generated report with 8 interactions
+2024-09-26 20:46:44 - INFO - Arabic CSV contains 23 records.
+2024-09-26 20:46:44 - INFO - French CSV contains 5 records.
+2024-09-26 20:46:44 - INFO - Cache size: 10 items
+2024-09-26 20:46:44 - INFO - Processing PDFs and checking collections...
+2024-09-26 20:46:52 - INFO - Checking Arabic collection...
+2024-09-26 20:46:52 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 20:46:52 - INFO - Checking French collection...
+2024-09-26 20:46:52 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 20:46:52 - INFO - Starting Flask app...
+2024-09-26 20:46:52 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:5005
+2024-09-26 20:46:52 - INFO - [33mPress CTRL+C to quit[0m
+2024-09-26 20:46:57 - INFO - Attempting GUI login for user: Adnane
+2024-09-26 20:46:59 - INFO - Attempting login for user: Adnane
+2024-09-26 20:46:59 - INFO - User Adnane logged in successfully
+2024-09-26 20:46:59 - INFO - 127.0.0.1 - - [26/Sep/2024 20:46:59] "POST /login HTTP/1.1" 200 -
+2024-09-26 20:46:59 - INFO - user_info set to: {'authenticated': True, 'id': '3f3dde4f-cda2-485c-99ef-39ed99e72efa', 'username': 'Adnane'}
+2024-09-26 20:47:00 - INFO - User Adnane logged in successfully via GUI
+2024-09-26 20:47:08 - INFO - 127.0.0.1 - - [26/Sep/2024 20:47:08] "[32mGET /dashboard HTTP/1.1[0m" 302 -
+2024-09-26 20:47:08 - INFO - 127.0.0.1 - - [26/Sep/2024 20:47:08] "GET /login?next=/dashboard HTTP/1.1" 200 -
+2024-09-26 20:47:09 - INFO - 127.0.0.1 - - [26/Sep/2024 20:47:09] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2024-09-26 20:47:13 - INFO - Attempting login for user: Adnane
+2024-09-26 20:47:13 - INFO - User Adnane logged in successfully
+2024-09-26 20:47:13 - INFO - 127.0.0.1 - - [26/Sep/2024 20:47:13] "POST /login HTTP/1.1" 200 -
+2024-09-26 20:47:13 - INFO - User Adnane loaded successfully
+2024-09-26 20:47:13 - INFO - Generated report with 8 interactions
+2024-09-26 20:47:13 - INFO - 127.0.0.1 - - [26/Sep/2024 20:47:13] "GET /dashboard HTTP/1.1" 200 -
+2024-09-26 20:47:18 - INFO - 127.0.0.1 - - [26/Sep/2024 20:47:18] "[33mGET / HTTP/1.1[0m" 404 -
+2024-09-26 20:58:16 - INFO - process_input user_info: {'authenticated': True, 'id': '3f3dde4f-cda2-485c-99ef-39ed99e72efa', 'username': 'Adnane'}
+2024-09-26 20:58:16 - INFO - Passing user_info to run_user_input_choice: {'authenticated': True, 'id': '3f3dde4f-cda2-485c-99ef-39ed99e72efa', 'username': 'Adnane'}
+2024-09-26 20:58:16 - INFO - Debug: user_info (type=<class 'dict'>) = {'authenticated': True, 'id': '3f3dde4f-cda2-485c-99ef-39ed99e72efa', 'username': 'Adnane'}
+2024-09-26 20:58:16 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 20:58:16 - INFO - Debug: user_info in user_input_choice (type=<class 'dict'>) = {'authenticated': True, 'id': '3f3dde4f-cda2-485c-99ef-39ed99e72efa', 'username': 'Adnane'}
+2024-09-26 20:58:16 - INFO - Received Text: Qui est Mohamed El Amrani ?
+2024-09-26 20:58:16 - ERROR - Current user is None
+2024-09-26 20:58:17 - INFO - Successfully retrieved embedding for content: Qui est Mohamed El Amrani ?
+2024-09-26 20:58:17 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 20:58:17 - INFO - HTTP Request: POST http://localhost:6333/collections/agriculture_fr/points/search "HTTP/1.1 200 OK"
+2024-09-26 20:58:37 - INFO - Total tokens used: 1133
+2024-09-26 20:58:37 - INFO - Prompt tokens: 677
+2024-09-26 20:58:37 - INFO - Completion tokens: 456
+2024-09-26 20:58:41 - INFO - Using default tokenizer.
+2024-09-26 20:58:41 - INFO - F1 Score: 1.00, ROUGE-L: 0.00, sacreBLEU: 0.00
+2024-09-26 20:58:41 - INFO - Prompting for feedback...
+2024-09-26 20:58:47 - INFO - Prompt for feedback called.
+2024-09-26 20:58:47 - INFO - Opening feedback window...
+2024-09-26 21:00:01 - INFO - 127.0.0.1 - - [26/Sep/2024 21:00:01] "[32mGET /user HTTP/1.1[0m" 302 -
+2024-09-26 21:00:03 - INFO - 127.0.0.1 - - [26/Sep/2024 21:00:03] "GET /login?next=/user HTTP/1.1" 200 -
+2024-09-26 21:01:10 - INFO - Generated report with 8 interactions
+2024-09-26 21:47:44 - INFO - Arabic CSV contains 23 records.
+2024-09-26 21:47:44 - INFO - French CSV contains 5 records.
+2024-09-26 21:47:44 - INFO - Generated report with 8 interactions
+2024-09-26 21:47:46 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 21:47:46 - INFO - HTTP Request: GET http://localhost:6333/collections/agriculture_ar "HTTP/1.1 200 OK"
+2024-09-26 21:47:46 - ERROR - Error retrieving collection details: 'CollectionParams' object has no attribute 'vector_size'
+2024-09-26 21:47:46 - INFO - Generated report with 8 interactions
+2024-09-26 21:47:54 - INFO - Arabic CSV contains 23 records.
+2024-09-26 21:47:54 - INFO - French CSV contains 5 records.
+2024-09-26 21:47:54 - INFO - Processing PDFs and checking collections...
+2024-09-26 21:47:58 - INFO - Cache size: 11 items
+2024-09-26 21:48:02 - INFO - Checking Arabic collection...
+2024-09-26 21:48:02 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 21:48:02 - INFO - Checking French collection...
+2024-09-26 21:48:02 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 21:48:02 - INFO - Starting Flask app...
+2024-09-26 21:48:02 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:5005
+2024-09-26 21:48:02 - INFO - [33mPress CTRL+C to quit[0m
+2024-09-26 22:09:30 - INFO - Attempting GUI login for user: Adnane
+2024-09-26 22:09:32 - INFO - Attempting login for user: Adnane
+2024-09-26 22:09:32 - INFO - User Adnane logged in successfully
+2024-09-26 22:09:32 - INFO - 127.0.0.1 - - [26/Sep/2024 22:09:32] "POST /login HTTP/1.1" 200 -
+2024-09-26 22:09:32 - INFO - user_info set to: {'authenticated': True, 'id': '3f3dde4f-cda2-485c-99ef-39ed99e72efa', 'username': 'Adnane'}
+2024-09-26 22:09:32 - INFO - User Adnane logged in successfully via GUI
+2024-09-26 22:11:04 - INFO - Attempting login for user: Adnane
+2024-09-26 22:11:04 - INFO - User Adnane logged in successfully
+2024-09-26 22:11:04 - INFO - 127.0.0.1 - - [26/Sep/2024 22:11:04] "POST /login HTTP/1.1" 200 -
+2024-09-26 22:13:09 - INFO - 127.0.0.1 - - [26/Sep/2024 22:13:09] "GET /health HTTP/1.1" 200 -
+2024-09-26 22:13:37 - INFO - User Adnane loaded successfully
+2024-09-26 22:13:37 - INFO - 127.0.0.1 - - [26/Sep/2024 22:13:37] "GET /user/interactions HTTP/1.1" 200 -
+2024-09-26 22:14:21 - INFO - 127.0.0.1 - - [26/Sep/2024 22:14:21] "[31m[1mGET /upload_pdf HTTP/1.1[0m" 405 -
+2024-09-26 22:14:51 - INFO - User Adnane loaded successfully
+2024-09-26 22:14:51 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 22:14:51 - INFO - 127.0.0.1 - - [26/Sep/2024 22:14:51] "GET /collections HTTP/1.1" 200 -
+2024-09-26 22:15:34 - INFO - User Adnane loaded successfully
+2024-09-26 22:15:34 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 22:15:34 - INFO - 127.0.0.1 - - [26/Sep/2024 22:15:34] "GET /collections HTTP/1.1" 200 -
+2024-09-26 22:16:00 - INFO - User Adnane loaded successfully
+2024-09-26 22:16:00 - INFO - 127.0.0.1 - - [26/Sep/2024 22:16:00] "[31m[1mGET /feedbacks HTTP/1.1[0m" 403 -
+2024-09-26 22:16:05 - INFO - Attempting login for user: Adnane
+2024-09-26 22:16:05 - INFO - User Adnane logged in successfully
+2024-09-26 22:16:05 - INFO - 127.0.0.1 - - [26/Sep/2024 22:16:05] "POST /login HTTP/1.1" 200 -
+2024-09-26 22:16:40 - INFO - 127.0.0.1 - - [26/Sep/2024 22:16:40] "GET /health HTTP/1.1" 200 -
+2024-09-26 22:16:52 - INFO - Attempting login for user: Adnane
+2024-09-26 22:16:52 - INFO - User Adnane logged in successfully
+2024-09-26 22:16:52 - INFO - 127.0.0.1 - - [26/Sep/2024 22:16:52] "POST /login HTTP/1.1" 200 -
+2024-09-26 22:17:13 - INFO - User Adnane loaded successfully
+2024-09-26 22:17:13 - INFO - 127.0.0.1 - - [26/Sep/2024 22:17:13] "[31m[1mGET /feedbacks HTTP/1.1[0m" 403 -
+2024-09-26 22:17:49 - INFO - User Adnane loaded successfully
+2024-09-26 22:17:49 - INFO - 127.0.0.1 - - [26/Sep/2024 22:17:49] "POST /update_true_text HTTP/1.1" 200 -
+2024-09-26 22:17:54 - INFO - User Adnane loaded successfully
+2024-09-26 22:17:54 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-26 22:17:54 - INFO - 127.0.0.1 - - [26/Sep/2024 22:17:54] "GET /collections HTTP/1.1" 200 -
+2024-09-26 22:18:32 - INFO - User Adnane loaded successfully
+2024-09-26 22:18:32 - INFO - 127.0.0.1 - - [26/Sep/2024 22:18:32] "POST /update_true_text HTTP/1.1" 200 -
+2024-09-27 08:59:31 - INFO - Arabic CSV contains 23 records.
+2024-09-27 08:59:31 - INFO - French CSV contains 5 records.
+2024-09-27 08:59:31 - INFO - Generated report with 8 interactions
+2024-09-27 08:59:32 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-27 08:59:33 - INFO - HTTP Request: GET http://localhost:6333/collections/agriculture_ar "HTTP/1.1 200 OK"
+2024-09-27 08:59:33 - ERROR - Error retrieving collection details: 'CollectionParams' object has no attribute 'vector_size'
+2024-09-27 08:59:33 - INFO - Generated report with 8 interactions
+2024-09-27 08:59:40 - INFO - Arabic CSV contains 23 records.
+2024-09-27 08:59:40 - INFO - French CSV contains 5 records.
+2024-09-27 08:59:40 - INFO - Processing PDFs and checking collections...
+2024-09-27 08:59:46 - INFO - Cache size: 11 items
+2024-09-27 08:59:48 - INFO - Checking Arabic collection...
+2024-09-27 08:59:48 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-27 08:59:48 - INFO - Checking French collection...
+2024-09-27 08:59:48 - INFO - HTTP Request: GET http://localhost:6333/collections "HTTP/1.1 200 OK"
+2024-09-27 08:59:48 - INFO - Starting Flask app...
+2024-09-27 08:59:48 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:5005
+2024-09-27 08:59:48 - INFO - [33mPress CTRL+C to quit[0m
